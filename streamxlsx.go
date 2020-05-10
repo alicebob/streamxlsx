@@ -40,12 +40,14 @@ func New(w io.Writer) *StreamXLSX {
 // Write a row to the currently opened sheet.
 // No values is a valid (empty) row, and not every row needs to have the same number of elements.
 //
-// In its core WriteRow writes Cell{} objects. But it you supply a basic Go
-// datatype it'll wrap it in a Cell. See Format() to apply number formatting to cells.
+// In its core WriteRow writes Cell{} objects. But if you give a basic Go
+// datatype it'll wrap it in a Cell (supported datatypes: all ints and uints,
+// floats, string, and []byte).
 // As a special case you can give a Hyperlink{} value, which will make the cell
-// a hyperlink.
+// a hyperlink. []byte values will be base64 encoded.
 //
-// Note: not all basic types are supported yet. Most notably time.Time.
+// See Format() to apply number formatting to cells.
+//
 // Note: Don't write more than 26 columns :)
 func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
 	sh := s.sheet()

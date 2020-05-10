@@ -1,6 +1,7 @@
 package streamxlsx
 
 import (
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -161,16 +162,19 @@ func encodeHyperlinks(enc *xml.Encoder, links []hyperlink) error {
 
 func asCell(v interface{}) (Cell, error) {
 	switch vt := v.(type) {
-	case int, int64:
+	case int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64:
 		return Cell{
 			Type:  "n",
 			Value: fmt.Sprintf("%d", vt),
 		}, nil
-	case float64:
+	case float32, float64:
 		return Cell{
 			Type:  "n",
 			Value: fmt.Sprintf("%f", vt),
 		}, nil
+	case []byte:
+		return asCell(base64.StdEncoding.EncodeToString(vt))
 	case string:
 		return Cell{
 			Type:         "inlineStr",
