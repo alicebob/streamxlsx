@@ -5,31 +5,35 @@ import (
 	"io"
 )
 
+// A Stylesheet has all used formats and styles. There is exactly one per document.
+// It's recommended to use `Format()` to work with styles, since that hides all the details.
+//
+// note: this could have support for fonts, fills, and borders.
 type Stylesheet struct {
 	NumFmts      []NumFmt
 	CellXfs      []Xf
 	CellStyleXfs []Xf
 }
 
-type StylesheetXML struct {
+type stylesheetXML struct {
 	XMLName      string     `xml:"styleSheet"`
 	XMLNS        string     `xml:"xmlns,attr"`
-	NumFmts      NumFmtsXML `xml:"numFmts"`
-	Fonts        FontsXML   `xml:"fonts"`
-	Fills        FillsXML   `xml:"fills"`
-	Borders      BordersXML `xml:"borders"`
-	CellStyleXfs XfsXML     `xml:"cellStyleXfs"`
-	CellXfs      XfsXML     `xml:"cellXfs"`
+	NumFmts      numFmtsXML `xml:"numFmts"`
+	Fonts        fontsXML   `xml:"fonts"`
+	Fills        fillsXML   `xml:"fills"`
+	Borders      bordersXML `xml:"borders"`
+	CellStyleXfs xfsXML     `xml:"cellStyleXfs"`
+	CellXfs      xfsXML     `xml:"cellXfs"`
 }
 
-type NumFmtsXML struct {
+type numFmtsXML struct {
 	Count   int      `xml:"count,attr"`
 	NumFmts []NumFmt `xml:"numFmt"`
 }
 
-type FontsXML struct {
+type fontsXML struct {
 	Count int    `xml:"count,attr"`
-	Fonts []Font `xml:"font"`
+	Fonts []font `xml:"font"`
 }
 
 /*
@@ -49,7 +53,8 @@ type FontScheme struct {
 	Val string `xml:"val,attr"`
 }
 */
-type Font struct {
+// not implemented
+type font struct {
 	// SZ     FontSZ     `xml:"sz"`
 	// Color  FontColor  `xml:"color"`
 	// Name   FontName   `xml:"name"`
@@ -57,31 +62,35 @@ type Font struct {
 	// Scheme FontScheme `xml:"scheme"`
 }
 
-type FillPattern struct {
+type fillPattern struct {
 	Type string `xml:"patternType,attr"`
 }
-type Fill struct {
-	PatternFill FillPattern `xml:"patternFill"`
+
+// not implemented
+type fill struct {
+	PatternFill fillPattern `xml:"patternFill"`
 }
-type FillsXML struct {
+type fillsXML struct {
 	Count int    `xml:"count,attr"`
-	Fills []Fill `xml:"fill"`
+	Fills []fill `xml:"fill"`
 }
 
-type BordersXML struct {
+type bordersXML struct {
 	Count   int      `xml:"count,attr"`
-	Borders []Border `xml:"border"`
+	Borders []border `xml:"border"`
 }
 
-type Border struct {
+// not implemented
+type border struct {
 	// <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
 }
 
-type XfsXML struct {
+type xfsXML struct {
 	Count int  `xml:"count,attr"`
 	Xfs   []Xf `xml:"xf"`
 }
 
+// Xf is either a CellXF or a CellStyleXf.
 // <xf numFmtId="0" fontId="8" fillId="4" borderId="0" xfId="3"/>
 type Xf struct {
 	NumFmtID          int  `xml:"numFmtId,attr"`
@@ -97,8 +106,10 @@ type NumFmt struct {
 	Code string `xml:"formatCode,attr"`
 }
 
-// get or create the ID for a numfmt. It can return a "default" ID, or create a custom ID.
-func (s *Stylesheet) getNumFmtID(code string) int {
+// Get or create the ID for a numfmt. It can return a "default" ID, or create a
+// custom ID.
+// Example of a code is "0.00".
+func (s *Stylesheet) GetNumFmtID(code string) int {
 	// see builtInNumFmt in tealeg
 	switch code {
 	case "0":
@@ -107,10 +118,11 @@ func (s *Stylesheet) getNumFmtID(code string) int {
 		return 2
 	case "#.##0":
 		return 3
+	default:
+		// FIXME &c.
 	}
-	// FIXME &c.
 
-	max := 163 // custom IDs start here, according to tealeg
+	max := 163 // custom IDs start here+1, according to tealeg
 	for _, nf := range s.NumFmts {
 		if nf.Code == code {
 			return nf.ID
@@ -129,7 +141,7 @@ func (s *Stylesheet) getNumFmtID(code string) int {
 
 // makes a CellXF ID
 // The ID is the entry in the array, 0-based
-func (s *Stylesheet) getCellID(xf Xf) int {
+func (s *Stylesheet) GetCellID(xf Xf) int {
 	for i, x := range s.CellXfs {
 		if x == xf {
 			return i
@@ -141,7 +153,7 @@ func (s *Stylesheet) getCellID(xf Xf) int {
 
 // makes a CellStyleXf ID
 // The ID is the entry in the array, 0-based
-func (s *Stylesheet) getCellStyleID(xf Xf) int {
+func (s *Stylesheet) GetCellStyleID(xf Xf) int {
 	for i, x := range s.CellStyleXfs {
 		if x == xf {
 			return i
@@ -155,15 +167,15 @@ func writeStylesheet(fh io.Writer, s *Stylesheet) {
 	fh.Write([]byte(xml.Header))
 	enc := xml.NewEncoder(fh)
 
-	enc.Encode(StylesheetXML{
+	enc.Encode(stylesheetXML{
 		XMLNS: "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-		NumFmts: NumFmtsXML{
+		NumFmts: numFmtsXML{
 			Count:   len(s.NumFmts),
 			NumFmts: s.NumFmts,
 		},
-		Fonts: FontsXML{
+		Fonts: fontsXML{
 			Count: 1,
-			Fonts: []Font{
+			Fonts: []font{
 				{
 					// SZ:     FontSZ{11},
 					// Color:  FontColor{1},
@@ -173,23 +185,23 @@ func writeStylesheet(fh io.Writer, s *Stylesheet) {
 				},
 			},
 		},
-		Fills: FillsXML{
+		Fills: fillsXML{
 			Count: 1,
-			Fills: []Fill{
-				{PatternFill: FillPattern{Type: "none"}},
+			Fills: []fill{
+				{PatternFill: fillPattern{Type: "none"}},
 			},
 		},
-		Borders: BordersXML{
+		Borders: bordersXML{
 			Count: 1,
-			Borders: []Border{
+			Borders: []border{
 				{},
 			},
 		},
-		CellStyleXfs: XfsXML{
+		CellStyleXfs: xfsXML{
 			Count: len(s.CellStyleXfs),
 			Xfs:   s.CellStyleXfs,
 		},
-		CellXfs: XfsXML{
+		CellXfs: xfsXML{
 			Count: len(s.CellXfs),
 			Xfs:   s.CellXfs,
 		},

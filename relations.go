@@ -6,13 +6,13 @@ import (
 	"io"
 )
 
-type Relationships struct {
+type relationshipsXML struct {
 	XMLName       string         `xml:"Relationships"`
 	XMLNS         string         `xml:"xmlns,attr"`
-	Relationships []Relationship `xml:"Relationship"`
+	Relationships []relationship `xml:"Relationship"`
 }
 
-type Relationship struct {
+type relationship struct {
 	ID         string `xml:"Id,attr"`
 	Target     string `xml:"Target,attr"`
 	Type       string `xml:"Type,attr"`
@@ -20,7 +20,7 @@ type Relationship struct {
 }
 
 func writeRelations(fh io.Writer) {
-	writeRelations_(fh, []Relationship{
+	writeRelations_(fh, []relationship{
 		{
 			ID:     "rId1",
 			Target: "/xl/workbook.xml",
@@ -30,7 +30,7 @@ func writeRelations(fh io.Writer) {
 }
 
 func writeWorkbookRelations(fh io.Writer, sheetTitles []string) error {
-	var rels = []Relationship{
+	var rels = []relationship{
 		{
 			ID:     "style1",
 			Target: "/xl/styles.xml",
@@ -38,7 +38,7 @@ func writeWorkbookRelations(fh io.Writer, sheetTitles []string) error {
 		},
 	}
 	for i := range sheetTitles {
-		rels = append(rels, Relationship{
+		rels = append(rels, relationship{
 			ID:     fmt.Sprintf("sheetId%d", i+1),
 			Target: fmt.Sprintf("/xl/worksheets/sheet%d.xml", i+1),
 			Type:   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
@@ -47,11 +47,11 @@ func writeWorkbookRelations(fh io.Writer, sheetTitles []string) error {
 	return writeRelations_(fh, rels)
 }
 
-func writeRelations_(fh io.Writer, rels []Relationship) error {
+func writeRelations_(fh io.Writer, rels []relationship) error {
 	fh.Write([]byte(xml.Header))
 	enc := xml.NewEncoder(fh)
 
-	return enc.Encode(Relationships{
+	return enc.Encode(relationshipsXML{
 		XMLNS:         "http://schemas.openxmlformats.org/package/2006/relationships",
 		Relationships: rels,
 	})

@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-type Workbook struct {
+type workbookXML struct {
 	XMLName string  `xml:"workbook"`
 	XMLNS   string  `xml:"xmlns,attr"`
 	XMLNSR  string  `xml:"xmlns:r,attr"`
@@ -28,11 +28,11 @@ func writeWorkbook(fh io.Writer, sheetTitles []string) {
 		sheets = append(sheets, Sheet{
 			Name: title,
 			ID:   fmt.Sprintf("%d", i+1),
-			RID:  fmt.Sprintf("sheetId%d", i+1), // FIXME: fancier workbook objects
+			RID:  fmt.Sprintf("sheetId%d", i+1),
 		})
 	}
 
-	enc.Encode(Workbook{
+	enc.Encode(workbookXML{
 		XMLNS:  "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
 		XMLNSR: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
 		Sheets: sheets,

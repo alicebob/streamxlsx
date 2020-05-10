@@ -6,12 +6,13 @@ import (
 	"io"
 )
 
-type Row struct {
+type rowXML struct {
 	Cells []Cell `xml:"c"`
 	Index int    `xml:"r,attr"`
 }
 
-// Exactly one of Value or InlineString should be set
+// These can be passed to `WriteRow()` if you want total control. WriteRow() will fill int the `.Ref` value.
+// Exactly one of Value or InlineString should be set.
 type Cell struct {
 	Ref          string  `xml:"r,attr"` // "A1" &c.
 	Type         string  `xml:"t,attr,omitempty"`
@@ -22,7 +23,6 @@ type Cell struct {
 }
 
 func (c Cell) String() string {
-	// FIXME
 	if c.InlineString != nil {
 		return *c.InlineString
 	}
@@ -41,7 +41,7 @@ type sheetEncoder struct {
 	enc        *xml.Encoder
 	rows       int
 	hyperlinks []hyperlink
-	relations  []Relationship
+	relations  []relationship
 }
 
 func newSheetEncoder(fh io.Writer) *sheetEncoder {
@@ -68,6 +68,7 @@ func (sh *sheetEncoder) writeRow(cs ...interface{}) {
 		cell.Ref = fmt.Sprintf("%c%d", 'A'+i, sh.rows+1) // FIXME: > 26
 		cells = append(cells, cell)
 
+		// hyperlinks refs are written at the end of the sheet
 		if link := cell.hyperlink; link != nil {
 			linkID := sh.addLinkRelation(link.url)
 			sh.hyperlinks = append(sh.hyperlinks, hyperlink{
@@ -80,7 +81,7 @@ func (sh *sheetEncoder) writeRow(cs ...interface{}) {
 	}
 
 	sh.enc.EncodeElement(
-		Row{
+		rowXML{
 			Index: sh.rows + 1,
 			Cells: cells,
 		},
@@ -93,7 +94,7 @@ func (sh *sheetEncoder) writeRow(cs ...interface{}) {
 
 func (sh *sheetEncoder) addLinkRelation(url string) string {
 	id := fmt.Sprintf("linkId%d", len(sh.relations)+1)
-	sh.relations = append(sh.relations, Relationship{
+	sh.relations = append(sh.relations, relationship{
 		ID:         id,
 		Type:       "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
 		Target:     url,
@@ -191,7 +192,7 @@ func asValue(v interface{}) Cell {
 	}
 }
 
-func Styled(id int, v interface{}) Cell {
+func applyStyle(id int, v interface{}) Cell {
 	c := asValue(v)
 	c.Style = &id
 	return c
