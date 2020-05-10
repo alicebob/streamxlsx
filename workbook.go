@@ -7,13 +7,13 @@ import (
 )
 
 type workbookXML struct {
-	XMLName string  `xml:"workbook"`
-	XMLNS   string  `xml:"xmlns,attr"`
-	XMLNSR  string  `xml:"xmlns:r,attr"`
-	Sheets  []Sheet `xml:"sheets>sheet"`
+	XMLName string     `xml:"workbook"`
+	XMLNS   string     `xml:"xmlns,attr"`
+	XMLNSR  string     `xml:"xmlns:r,attr"`
+	Sheets  []sheetXML `xml:"sheets>sheet"`
 }
 
-type Sheet struct {
+type sheetXML struct {
 	Name string `xml:"name,attr"`
 	ID   string `xml:"sheetId,attr"`
 	RID  string `xml:"r:id,attr"`
@@ -23,9 +23,9 @@ func writeWorkbook(fh io.Writer, sheetTitles []string) error {
 	fh.Write([]byte(xml.Header))
 	enc := xml.NewEncoder(fh)
 
-	var sheets []Sheet
+	var sheets []sheetXML
 	for i, title := range sheetTitles {
-		sheets = append(sheets, Sheet{
+		sheets = append(sheets, sheetXML{
 			Name: title,
 			ID:   fmt.Sprintf("%d", i+1),
 			RID:  fmt.Sprintf("sheetId%d", i+1),
