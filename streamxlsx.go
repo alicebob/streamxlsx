@@ -41,26 +41,29 @@ func New(w io.Writer) *StreamXLSX {
 // No values is a valid (empty) row, and not every row needs to have the same number of elements.
 //
 // In its core WriteRow writes Cell{} objects. But it you supply a basic Go
-// datatype it'll wrap it in a Cell.
+// datatype it'll wrap it in a Cell. See Format() to apply number formatting to cells.
 // As a special case you can give a Hyperlink{} value, which will make the cell
 // a hyperlink.
 //
 // Note: not all basic types are supported yet. Most notably time.Time.
 // Note: Don't write more than 26 columns :)
-func (s *StreamXLSX) WriteRow(vs ...interface{}) {
+func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
 	sh := s.sheet()
-	sh.writeRow(vs...)
+	return sh.writeRow(vs...)
 }
 
 // WriteSheet closes the currenly open sheet, with the given title.
 // The process is you first do all the `WriteRow()`s for a sheet, followed by
 // its WriteSheet().  There is always an open sheet. You don't have to close
 // the final sheet, but it'll give you a boring name ("sheet N").
-func (s *StreamXLSX) WriteSheet(title string) {
+func (s *StreamXLSX) WriteSheet(title string) error {
 	s.openSheet.Close()
-	s.writeSheetRelations() // for hyperlink refs
+	if err := s.writeSheetRelations(); err != nil { // for hyperlink refs
+		return err
+	}
 	s.openSheet = nil
 	s.finishedSheets = append(s.finishedSheets, title)
+	return nil
 }
 
 // Adds a number format to a cell. Examples or formats are "0.00", "0%", ...
@@ -74,7 +77,8 @@ func (s *StreamXLSX) Format(code string, cell interface{}) Cell {
 		XfID:              &cellStyleID,
 	}
 	xfID := s.Styles.GetCellID(styleFx)
-	return applyStyle(xfID, cell)
+	c, _ := applyStyle(xfID, cell) // FIXME
+	return c
 }
 
 // Adds a hyperlink in a cell. You can use these as a value in WriteRow().
@@ -85,16 +89,27 @@ type Hyperlink struct {
 }
 
 // Finish writing the spreadsheet.
-func (s *StreamXLSX) Close() {
+func (s *StreamXLSX) Close() error {
 	if s.openSheet != nil {
-		s.WriteSheet(fmt.Sprintf("sheet %d", len(s.finishedSheets)+1))
+		if err := s.WriteSheet(fmt.Sprintf("sheet %d", len(s.finishedSheets)+1)); err != nil {
+			return err
+		}
+
 	}
 
-	s.writeWorkbook()
-	s.writeStylesheet()
-	s.writeWorkbookRelations()
-	s.writeContentTypes()
-	s.zip.Close()
+	if err := s.writeWorkbook(); err != nil {
+		return err
+	}
+	if err := s.writeStylesheet(); err != nil {
+		return err
+	}
+	if err := s.writeWorkbookRelations(); err != nil {
+		return err
+	}
+	if err := s.writeContentTypes(); err != nil {
+		return err
+	}
+	return s.zip.Close()
 }
 
 func (s *StreamXLSX) sheet() *sheetEncoder {
@@ -104,47 +119,65 @@ func (s *StreamXLSX) sheet() *sheetEncoder {
 	filename := fmt.Sprintf("xl/worksheets/sheet%d.xml", len(s.finishedSheets)+1)
 	fh, _ := s.zip.Create(filename) // no need to close!
 
-	enc := newSheetEncoder(fh)
+	enc, _ := newSheetEncoder(fh) // FIXME err
 
 	s.openSheet = enc
 	return s.openSheet
 }
 
-func (s *StreamXLSX) writeWorkbook() {
+func (s *StreamXLSX) writeWorkbook() error {
 	filename := "xl/workbook.xml"
-	fh, _ := s.zip.Create(filename)
-	writeWorkbook(fh, s.finishedSheets)
+	fh, err := s.zip.Create(filename)
+	if err != nil {
+		return err
+	}
+	return writeWorkbook(fh, s.finishedSheets)
 }
 
-func (s *StreamXLSX) writeStylesheet() {
+func (s *StreamXLSX) writeStylesheet() error {
 	filename := "xl/styles.xml"
-	fh, _ := s.zip.Create(filename)
-	writeStylesheet(fh, s.Styles)
+	fh, err := s.zip.Create(filename)
+	if err != nil {
+		return err
+	}
+	return writeStylesheet(fh, s.Styles)
 }
 
-func (s *StreamXLSX) writeRelations() {
+func (s *StreamXLSX) writeRelations() error {
 	filename := "_rels/.rels"
-	fh, _ := s.zip.Create(filename)
-	writeRelations(fh)
+	fh, err := s.zip.Create(filename)
+	if err != nil {
+		return err
+	}
+	return writeRelations(fh)
 }
 
-func (s *StreamXLSX) writeWorkbookRelations() {
+func (s *StreamXLSX) writeWorkbookRelations() error {
 	filename := "xl/_rels/workbook.xml.rels"
-	fh, _ := s.zip.Create(filename)
-	writeWorkbookRelations(fh, s.finishedSheets)
+	fh, err := s.zip.Create(filename)
+	if err != nil {
+		return err
+	}
+	return writeWorkbookRelations(fh, s.finishedSheets)
 }
 
-func (s *StreamXLSX) writeSheetRelations() {
+func (s *StreamXLSX) writeSheetRelations() error {
 	if len(s.openSheet.relations) == 0 {
-		return
+		return nil
 	}
 	filename := fmt.Sprintf("xl/worksheets/_rels/sheet%d.xml.rels", len(s.finishedSheets)+1)
-	fh, _ := s.zip.Create(filename)
-	writeRelations_(fh, s.openSheet.relations)
+	fh, err := s.zip.Create(filename)
+	if err != nil {
+		return err
+	}
+	return writeRelations_(fh, s.openSheet.relations)
 }
 
-func (s *StreamXLSX) writeContentTypes() {
+func (s *StreamXLSX) writeContentTypes() error {
 	filename := "[Content_Types].xml"
-	fh, _ := s.zip.Create(filename)
-	writeContentTypes(fh, len(s.finishedSheets))
+	fh, err := s.zip.Create(filename)
+	if err != nil {
+		return err
+	}
+	return writeContentTypes(fh, len(s.finishedSheets))
 }

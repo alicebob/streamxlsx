@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-func writeContentTypes(fh io.Writer, sheetCount int) {
+func writeContentTypes(fh io.Writer, sheetCount int) error {
 	fh.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Override PartName="/_rels/.rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"></Override>
@@ -21,5 +21,6 @@ func writeContentTypes(fh io.Writer, sheetCount int) {
 			i+1,
 		)
 	}
-	fh.Write([]byte(`</Types>`))
+	_, err := fh.Write([]byte(`</Types>`))
+	return err
 }

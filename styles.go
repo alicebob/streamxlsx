@@ -163,11 +163,11 @@ func (s *Stylesheet) GetCellStyleID(xf Xf) int {
 	return len(s.CellStyleXfs) - 1
 }
 
-func writeStylesheet(fh io.Writer, s *Stylesheet) {
+func writeStylesheet(fh io.Writer, s *Stylesheet) error {
 	fh.Write([]byte(xml.Header))
 	enc := xml.NewEncoder(fh)
 
-	enc.Encode(stylesheetXML{
+	return enc.Encode(stylesheetXML{
 		XMLNS: "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
 		NumFmts: numFmtsXML{
 			Count:   len(s.NumFmts),

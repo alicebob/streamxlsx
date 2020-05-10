@@ -44,16 +44,14 @@ type sheetEncoder struct {
 	relations  []relationship
 }
 
-func newSheetEncoder(fh io.Writer) *sheetEncoder {
+func newSheetEncoder(fh io.Writer) (*sheetEncoder, error) {
 	fh.Write([]byte(xml.Header))
 
 	sh := &sheetEncoder{
 		enc: xml.NewEncoder(fh),
 	}
 
-	sheetOpen(sh.enc)
-
-	return sh
+	return sh, sheetOpen(sh.enc)
 }
 
 func (sh *sheetEncoder) Close() {
@@ -61,10 +59,13 @@ func (sh *sheetEncoder) Close() {
 	sh.enc.Flush()
 }
 
-func (sh *sheetEncoder) writeRow(cs ...interface{}) {
+func (sh *sheetEncoder) writeRow(cs ...interface{}) error {
 	var cells []Cell
 	for i, v := range cs {
-		cell := asValue(v)
+		cell, err := asCell(v)
+		if err != nil {
+			return err
+		}
 		cell.Ref = fmt.Sprintf("%c%d", 'A'+i, sh.rows+1) // FIXME: > 26
 		cells = append(cells, cell)
 
@@ -80,16 +81,16 @@ func (sh *sheetEncoder) writeRow(cs ...interface{}) {
 		}
 	}
 
-	sh.enc.EncodeElement(
+	sh.rows++
+	return sh.enc.EncodeElement(
 		rowXML{
-			Index: sh.rows + 1,
+			Index: sh.rows,
 			Cells: cells,
 		},
 		xml.StartElement{
 			Name: xml.Name{"", "row"},
 		},
 	)
-	sh.rows++
 }
 
 func (sh *sheetEncoder) addLinkRelation(url string) string {
@@ -103,15 +104,17 @@ func (sh *sheetEncoder) addLinkRelation(url string) string {
 	return id
 }
 
-func sheetOpen(enc *xml.Encoder) {
-	enc.EncodeToken(xml.StartElement{
+func sheetOpen(enc *xml.Encoder) error {
+	if err := enc.EncodeToken(xml.StartElement{
 		Name: xml.Name{"", "worksheet"},
 		Attr: []xml.Attr{
 			{xml.Name{"", "xmlns"}, "http://schemas.openxmlformats.org/spreadsheetml/2006/main"},
 			{xml.Name{"", "xmlns:r"}, "http://schemas.openxmlformats.org/officeDocument/2006/relationships"},
 		},
-	})
-	enc.EncodeToken(xml.StartElement{
+	}); err != nil {
+		return err
+	}
+	return enc.EncodeToken(xml.StartElement{
 		Name: xml.Name{"", "sheetData"},
 	})
 }
@@ -127,12 +130,9 @@ func sheetClose(enc *xml.Encoder, links []hyperlink) error {
 		return err
 	}
 
-	if err := enc.EncodeToken(xml.EndElement{
+	return enc.EncodeToken(xml.EndElement{
 		Name: xml.Name{"", "worksheet"},
-	}); err != nil {
-		return err
-	}
-	return nil
+	})
 }
 
 func encodeHyperlinks(enc *xml.Encoder, links []hyperlink) error {
@@ -159,41 +159,41 @@ func encodeHyperlinks(enc *xml.Encoder, links []hyperlink) error {
 	})
 }
 
-func asValue(v interface{}) Cell {
+func asCell(v interface{}) (Cell, error) {
 	switch vt := v.(type) {
 	case int, int64:
 		return Cell{
 			Type:  "n",
 			Value: fmt.Sprintf("%d", vt),
-		}
+		}, nil
 	case float64:
 		return Cell{
 			Type:  "n",
 			Value: fmt.Sprintf("%f", vt),
-		}
+		}, nil
 	case string:
 		return Cell{
 			Type:         "inlineStr",
 			InlineString: &vt,
-		}
+		}, nil
 	case Cell:
-		return vt
+		return vt, nil
 	case Hyperlink:
-		cell := asValue(vt.Title)
+		cell, err := asCell(vt.Title)
 		cell.hyperlink = &hyperlink{
 			url:     vt.URL,
 			Display: vt.Title,
 			Tooltip: vt.Tooltip,
 		}
-		return cell
+		return cell, err
 	default:
 		// FIXME :)
-		panic(fmt.Sprintf("unhandled value Fixme! %T", vt))
+		return Cell{}, fmt.Errorf("unhandled value Fixme! %T", vt)
 	}
 }
 
-func applyStyle(id int, v interface{}) Cell {
-	c := asValue(v)
+func applyStyle(id int, v interface{}) (Cell, error) {
+	c, err := asCell(v)
 	c.Style = &id
-	return c
+	return c, err
 }

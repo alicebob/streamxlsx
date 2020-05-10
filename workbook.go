@@ -19,7 +19,7 @@ type Sheet struct {
 	RID  string `xml:"r:id,attr"`
 }
 
-func writeWorkbook(fh io.Writer, sheetTitles []string) {
+func writeWorkbook(fh io.Writer, sheetTitles []string) error {
 	fh.Write([]byte(xml.Header))
 	enc := xml.NewEncoder(fh)
 
@@ -32,7 +32,7 @@ func writeWorkbook(fh io.Writer, sheetTitles []string) {
 		})
 	}
 
-	enc.Encode(workbookXML{
+	return enc.Encode(workbookXML{
 		XMLNS:  "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
 		XMLNSR: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
 		Sheets: sheets,

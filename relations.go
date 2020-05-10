@@ -19,8 +19,8 @@ type relationship struct {
 	TargetMode string `xml:"TargetMode,attr,omitempty"`
 }
 
-func writeRelations(fh io.Writer) {
-	writeRelations_(fh, []relationship{
+func writeRelations(fh io.Writer) error {
+	return writeRelations_(fh, []relationship{
 		{
 			ID:     "rId1",
 			Target: "/xl/workbook.xml",
