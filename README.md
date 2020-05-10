@@ -25,7 +25,8 @@ Example:
 - support for number formatting
 - hyperlinks
 - multiple sheets
-- currently no support for colors, fonts, borders, graphs, or formulas.
+- currently no support for colors, fonts, borders
+- likely never support for graphs, merged cells, hidden columns, or formulas.
 
 
 ## status
@@ -36,7 +37,7 @@ The exact API how to style cells will still change.
 
 ## see also
 
-https://github.com/tealeg/xlsx/
-https://docs.microsoft.com/en-us/office/open-xml/working-with-sheets
-https://github.com/psmithuk/xlsx
-https://github.com/plandem/xlsx
+https://github.com/tealeg/xlsx/  
+https://docs.microsoft.com/en-us/office/open-xml/working-with-sheets  
+https://github.com/psmithuk/xlsx  
+https://github.com/plandem/xlsx  

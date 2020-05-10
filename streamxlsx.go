@@ -47,8 +47,6 @@ func New(w io.Writer) *StreamXLSX {
 // a hyperlink. []byte values will be base64 encoded.
 //
 // See Format() to apply number formatting to cells.
-//
-// Note: Don't write more than 26 columns :)
 func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
 	sh := s.sheet()
 	return sh.writeRow(vs...)

@@ -67,7 +67,7 @@ func (sh *sheetEncoder) writeRow(cs ...interface{}) error {
 		if err != nil {
 			return err
 		}
-		cell.Ref = fmt.Sprintf("%c%d", 'A'+i, sh.rows+1) // FIXME: > 26
+		cell.Ref = AsRef(i, sh.rows)
 		cells = append(cells, cell)
 
 		// hyperlinks refs are written at the end of the sheet
@@ -191,8 +191,7 @@ func asCell(v interface{}) (Cell, error) {
 		}
 		return cell, err
 	default:
-		// FIXME :)
-		return Cell{}, fmt.Errorf("unhandled value Fixme! %T", vt)
+		return Cell{}, fmt.Errorf("unsupported cell type: %T", vt)
 	}
 }
 
@@ -200,4 +199,24 @@ func applyStyle(id int, v interface{}) (Cell, error) {
 	c, err := asCell(v)
 	c.Style = &id
 	return c, err
+}
+
+// AsRef makes an 'A13' style ref. Arguments are 0-based.
+func AsRef(column, row int) string {
+	return fmt.Sprintf("%s%d", asCol(column), row+1)
+}
+
+// col number as 'ABC' column ref
+func asCol(n int) string {
+	// taken from https://github.com/psmithuk/xlsx/blob/master/xlsx.go
+	var s string
+	n += 1
+
+	for n > 0 {
+		n -= 1
+		s = string('A'+(n%26)) + s
+		n /= 26
+	}
+
+	return s
 }
