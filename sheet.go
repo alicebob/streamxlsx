@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"time"
 )
 
 type rowXML struct {
@@ -162,6 +163,8 @@ func encodeHyperlinks(enc *xml.Encoder, links []hyperlink) error {
 
 func asCell(v interface{}) (Cell, error) {
 	switch vt := v.(type) {
+	case Cell:
+		return vt, nil
 	case int, int8, int16, int32, int64,
 		uint, uint8, uint16, uint32, uint64:
 		return Cell{
@@ -180,8 +183,11 @@ func asCell(v interface{}) (Cell, error) {
 			Type:         "inlineStr",
 			InlineString: &vt,
 		}, nil
-	case Cell:
-		return vt, nil
+	case time.Time:
+		return Cell{
+			Type:  "n",
+			Value: oaDate(vt),
+		}, nil
 	case Hyperlink:
 		cell, err := asCell(vt.Title)
 		cell.hyperlink = &hyperlink{
@@ -219,4 +225,21 @@ func asCol(n int) string {
 	}
 
 	return s
+}
+
+func oaDate(d time.Time) string {
+	// taken from https://github.com/psmithuk/xlsx/blob/master/xlsx.go
+	epoch := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)
+	nsPerDay := 24 * time.Hour
+
+	v := -1 * float64(epoch.Sub(d)) / float64(nsPerDay)
+
+	// TODO: deal with dates before epoch
+	// e.g. http://stackoverflow.com/questions/15549823/oadate-to-milliseconds-timestamp-in-javascript/15550284#15550284
+
+	if d.Hour() == 0 && d.Minute() == 0 && d.Second() == 0 {
+		return fmt.Sprintf("%d", int64(v))
+	} else {
+		return fmt.Sprintf("%f", v)
+	}
 }

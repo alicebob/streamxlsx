@@ -5,6 +5,8 @@ import (
 	"io"
 )
 
+const DefaultDatetimeFormat = "m/d/yy h:mm"
+
 // A Stylesheet has all used formats and styles. There is exactly one per document.
 // It's recommended to use `Format()` to work with styles, since that hides all the details.
 //
@@ -118,6 +120,8 @@ func (s *Stylesheet) GetNumFmtID(code string) int {
 		return 2
 	case "#.##0":
 		return 3
+	case "m/d/yy h:mm":
+		return 22
 	default:
 		// FIXME &c.
 	}

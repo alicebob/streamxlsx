@@ -37,14 +37,17 @@ func New(w io.Writer) *StreamXLSX {
 	return s
 }
 
-// Write a row to the currently opened sheet.
-// No values is a valid (empty) row, and not every row needs to have the same number of elements.
+// Write a row to the current sheet.
+// No values is a valid (empty) row, and not every row needs to have the same
+// number of elements.
 //
-// In its core WriteRow writes Cell{} objects. But if you give a basic Go
-// datatype it'll wrap it in a Cell (supported datatypes: all ints and uints,
-// floats, string, and []byte).
-// As a special case you can give a Hyperlink{} value, which will make the cell
-// a hyperlink. []byte values will be base64 encoded.
+// Supported cell datatypes:
+//    all ints and uints, floats, string
+// Additional special cases:
+//    []byte: will be base64 encoded
+//    time.Time: handled, but you need to Format() it. For example: s.Format("mm-dd-yy", aTimeTime)
+//    Hyperlink{}: will make the cell a hyperlink
+//    Cell{}: if you want to set everything manually
 //
 // See Format() to apply number formatting to cells.
 func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
@@ -77,7 +80,7 @@ func (s *StreamXLSX) Format(code string, cell interface{}) Cell {
 		XfID:              &cellStyleID,
 	}
 	xfID := s.Styles.GetCellID(styleFx)
-	c, _ := applyStyle(xfID, cell) // FIXME
+	c, _ := applyStyle(xfID, cell) // FIXME: error is ignored
 	return c
 }
 

@@ -3,6 +3,7 @@ package streamxlsx_test
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/alicebob/streamxlsx"
 	"github.com/stretchr/testify/assert"
@@ -51,11 +52,14 @@ func TestBasic(t *testing.T) {
 func TestDatatypes(t *testing.T) {
 	buf := &bytes.Buffer{}
 	s := streamxlsx.New(buf)
+
+	// strings
 	require.NoError(t, s.WriteRow("a string", "hello world!"))
 	require.NoError(t, s.WriteRow("a char", 'q'))
 	require.NoError(t, s.WriteRow("bytes", []byte("hi there")))
 	require.NoError(t, s.WriteSheet("strings"))
 
+	// numbers
 	require.NoError(t, s.WriteRow("a number", 14))
 	require.NoError(t, s.WriteRow("a number", int(15)))
 	require.NoError(t, s.WriteRow("a number", int8(16)))
@@ -72,7 +76,9 @@ func TestDatatypes(t *testing.T) {
 	require.NoError(t, s.WriteRow("a float", float64(3.1415)))
 	require.NoError(t, s.WriteSheet("numbers"))
 
+	// misc
 	require.NoError(t, s.WriteRow("a link", streamxlsx.Hyperlink{"http://example.com", "clickme", "I'm a tooltip"}))
+	require.NoError(t, s.WriteRow("a datetime", s.Format(streamxlsx.DefaultDatetimeFormat, time.Date(2010, 10, 10, 10, 10, 10, 0, time.UTC))))
 	require.NoError(t, s.WriteSheet("misc"))
 
 	s.Close()
@@ -127,8 +133,9 @@ func TestDatatypes(t *testing.T) {
 			assert.Equal(t, value, cell.String())
 		}
 		miscs := xf.Sheets[2]
-		require.Len(t, miscs.Rows, 1)
+		require.Len(t, miscs.Rows, 2)
 		test(miscs.Rows[0].Cells[1], xlsx.CellTypeInline, "clickme")
+		test(miscs.Rows[1].Cells[1], xlsx.CellTypeNumeric, "10/10/10 10:10")
 	})
 }
 
