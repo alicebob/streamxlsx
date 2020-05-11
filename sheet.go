@@ -67,8 +67,6 @@ type hyperlink struct {
 }
 
 type sheetEncoder struct {
-	// enc        *xml.Encoder
-	// w          io.Writer
 	buf        *bufio.Writer
 	rows       int
 	hyperlinks []hyperlink
@@ -79,9 +77,7 @@ func newSheetEncoder(fh io.Writer) (*sheetEncoder, error) {
 	fh.Write([]byte(xml.Header))
 
 	sh := &sheetEncoder{
-		// enc: xml.NewEncoder(fh),
-		// w: fh,
-		buf: bufio.NewWriter(fh),
+		buf: bufio.NewWriterSize(fh, 1_000_000),
 	}
 
 	return sh, sheetOpen(sh.buf)
