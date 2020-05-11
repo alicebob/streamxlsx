@@ -17,6 +17,7 @@ type StreamXLSX struct {
 	finishedSheets []string
 	// The stylesheet will be written on Close(). You generally won't want to use this directly, but via `Format()`.
 	Styles *Stylesheet
+	styleCache map[string]int
 }
 
 // New creates a new file. Do Close() it afterwards.
@@ -27,6 +28,7 @@ func New(w io.Writer) *StreamXLSX {
 		w:      w,
 		zip:    zip.NewWriter(w),
 		Styles: &Stylesheet{},
+		styleCache: map[string]int{},
 	}
 
 	// empty style. Not 100% it's needed
@@ -72,6 +74,11 @@ func (s *StreamXLSX) WriteSheet(title string) error {
 // Adds a number format to a cell. Examples or formats are "0.00", "0%", ...
 // This is used to wrap a value in a WriteRow().
 func (s *StreamXLSX) Format(code string, cell interface{}) Cell {
+	if xfID, ok := s.styleCache[code]; ok {
+		c, _ := applyStyle(xfID, cell) // FIXME: error is ignored
+		return c
+	}
+
 	numFmtID := s.Styles.GetNumFmtID(code)
 	cellStyleID := s.Styles.GetCellStyleID(Xf{})
 	styleFx := Xf{
@@ -80,6 +87,7 @@ func (s *StreamXLSX) Format(code string, cell interface{}) Cell {
 		XfID:              &cellStyleID,
 	}
 	xfID := s.Styles.GetCellID(styleFx)
+	s.styleCache[code] = xfID
 	c, _ := applyStyle(xfID, cell) // FIXME: error is ignored
 	return c
 }
