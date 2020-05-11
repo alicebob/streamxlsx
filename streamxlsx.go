@@ -1,7 +1,6 @@
-// Package streamxlsx is implements a streaming .xlsx (Excel spreadsheat) file writer.
+// Package streamxlsx implements a streaming .xlsx (Excel spreadsheat) file writer.
 //
-// The focus is to easily generate tabular data files, and not many fancy
-// spreadsheet functions are implemented.
+// The focus is to easily generate tabular data files.
 package streamxlsx
 
 import (
@@ -16,7 +15,8 @@ type StreamXLSX struct {
 	zip            *zip.Writer
 	openSheet      *sheetEncoder
 	finishedSheets []string
-	// The stylesheet will be written on Close(). You generally won't want to use this directly, but via `Format()`.
+	// The stylesheet will be written on Close(). You generally won't want to
+	// use this directly, but via `Format()`.
 	Styles     *Stylesheet
 	styleCache map[string]int
 }
