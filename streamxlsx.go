@@ -6,17 +6,18 @@ package streamxlsx
 
 import (
 	"archive/zip"
+	"bufio"
 	"fmt"
 	"io"
 )
 
 type StreamXLSX struct {
-	w              io.Writer
+	buf            *bufio.Writer
 	zip            *zip.Writer
 	openSheet      *sheetEncoder
 	finishedSheets []string
 	// The stylesheet will be written on Close(). You generally won't want to use this directly, but via `Format()`.
-	Styles *Stylesheet
+	Styles     *Stylesheet
 	styleCache map[string]int
 }
 
@@ -24,10 +25,11 @@ type StreamXLSX struct {
 //
 // A StreamXLSX is currently not safe to use with multiple go routines at the same time.
 func New(w io.Writer) *StreamXLSX {
+	buf := bufio.NewWriterSize(w, 1*1024*1024)
 	s := &StreamXLSX{
-		w:      w,
-		zip:    zip.NewWriter(w),
-		Styles: &Stylesheet{},
+		buf:        buf,
+		zip:        zip.NewWriter(buf),
+		Styles:     &Stylesheet{},
 		styleCache: map[string]int{},
 	}
 
@@ -120,7 +122,10 @@ func (s *StreamXLSX) Close() error {
 	if err := s.writeContentTypes(); err != nil {
 		return err
 	}
-	return s.zip.Close()
+	if err := s.zip.Close(); err != nil {
+		return err
+	}
+	return s.buf.Flush()
 }
 
 func (s *StreamXLSX) sheet() *sheetEncoder {
