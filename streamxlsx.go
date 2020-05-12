@@ -5,13 +5,11 @@ package streamxlsx
 
 import (
 	"archive/zip"
-	"bufio"
 	"fmt"
 	"io"
 )
 
 type StreamXLSX struct {
-	buf            *bufio.Writer
 	zip            *zip.Writer
 	openSheet      *sheetEncoder
 	finishedSheets []string
@@ -25,10 +23,8 @@ type StreamXLSX struct {
 //
 // A StreamXLSX is currently not safe to use with multiple go routines at the same time.
 func New(w io.Writer) *StreamXLSX {
-	buf := bufio.NewWriterSize(w, 1*1024*1024)
 	s := &StreamXLSX{
-		buf:        buf,
-		zip:        zip.NewWriter(buf),
+		zip:        zip.NewWriter(w),
 		Styles:     &Stylesheet{},
 		styleCache: map[string]int{},
 	}
@@ -122,10 +118,7 @@ func (s *StreamXLSX) Close() error {
 	if err := s.writeContentTypes(); err != nil {
 		return err
 	}
-	if err := s.zip.Close(); err != nil {
-		return err
-	}
-	return s.buf.Flush()
+	return s.zip.Close()
 }
 
 func (s *StreamXLSX) sheet() *sheetEncoder {
