@@ -113,14 +113,16 @@ func oaDate(d time.Time) string {
 	epoch := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)
 	nsPerDay := 24 * time.Hour
 
-	v := -1 * float64(epoch.Sub(d)) / float64(nsPerDay)
+	// keep times in the given timezone
+	fakeUTC := time.Date(d.Year(), d.Month(), d.Day(), d.Hour(), d.Minute(), d.Second(), d.Nanosecond(), time.UTC)
+
+	v := -1 * float64(epoch.Sub(fakeUTC)) / float64(nsPerDay)
 
 	// TODO: deal with dates before epoch
 	// e.g. http://stackoverflow.com/questions/15549823/oadate-to-milliseconds-timestamp-in-javascript/15550284#15550284
 
-	if d.Hour() == 0 && d.Minute() == 0 && d.Second() == 0 {
+	if fakeUTC.Hour() == 0 && fakeUTC.Minute() == 0 && fakeUTC.Second() == 0 {
 		return fmt.Sprintf("%d", int64(v))
-	} else {
-		return fmt.Sprintf("%f", v)
 	}
+	return fmt.Sprintf("%f", v)
 }
