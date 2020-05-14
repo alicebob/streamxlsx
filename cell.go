@@ -80,6 +80,15 @@ func asCell(v interface{}) (Cell, error) {
 			Type:  "n",
 			Value: oaDate(vt),
 		}, nil
+	case bool:
+		v := "0"
+		if vt {
+			v = "1"
+		}
+		return Cell{
+			Type:  "b",
+			Value: v,
+		}, nil
 	case Hyperlink:
 		cell, err := asCell(vt.Title)
 		cell.hyperlink = &hyperlink{

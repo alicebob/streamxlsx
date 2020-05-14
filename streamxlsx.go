@@ -42,7 +42,7 @@ func New(w io.Writer) *StreamXLSX {
 // number of elements.
 //
 // Supported cell datatypes:
-//    all ints and uints, floats, string
+//    all ints and uints, floats, string, bool
 // Additional special cases:
 //    []byte: will be base64 encoded
 //    time.Time: handled, but you need to Format() it. For example: s.Format("mm-dd-yy", aTimeTime)

@@ -79,6 +79,7 @@ func TestDatatypes(t *testing.T) {
 	// misc
 	require.NoError(t, s.WriteRow("a link", streamxlsx.Hyperlink{"http://example.com", "clickme", "I'm a tooltip"}))
 	require.NoError(t, s.WriteRow("a datetime", s.Format(streamxlsx.DefaultDatetimeFormat, time.Date(2010, 10, 10, 10, 10, 10, 0, time.UTC))))
+	require.NoError(t, s.WriteRow("bool", true, false))
 	require.NoError(t, s.WriteSheet("misc"))
 
 	s.Close()
@@ -133,9 +134,11 @@ func TestDatatypes(t *testing.T) {
 			assert.Equal(t, value, cell.String())
 		}
 		miscs := xf.Sheets[2]
-		require.Len(t, miscs.Rows, 2)
+		require.Len(t, miscs.Rows, 3)
 		test(miscs.Rows[0].Cells[1], xlsx.CellTypeInline, "clickme")
 		test(miscs.Rows[1].Cells[1], xlsx.CellTypeNumeric, "10/10/10 10:10")
+		test(miscs.Rows[2].Cells[1], xlsx.CellTypeBool, "TRUE")
+		test(miscs.Rows[2].Cells[2], xlsx.CellTypeBool, "FALSE")
 	})
 }
 
