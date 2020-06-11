@@ -2,6 +2,7 @@ package streamxlsx_test
 
 import (
 	"bytes"
+	"os"
 	"testing"
 	"time"
 
@@ -181,4 +182,38 @@ func TestHangingSheet(t *testing.T) {
 	sheet0 := xf.Sheets[0]
 	require.Equal(t, "sheet 1", sheet0.Name)
 	require.Len(t, sheet0.Rows, 2)
+}
+
+func TestEmptySheet(t *testing.T) {
+	buf := &bytes.Buffer{}
+	s := streamxlsx.New(buf)
+	s.WriteSheet("sheet 1")
+	s.WriteSheet("sheet 2")
+	s.Close()
+
+	// Read it back again
+	xf, err := xlsx.OpenBinary(buf.Bytes())
+	require.NoError(t, err)
+	require.Len(t, xf.Sheets, 2)
+	sheet0 := xf.Sheets[0]
+	require.Equal(t, "sheet 1", sheet0.Name)
+	require.Len(t, sheet0.Rows, 0)
+}
+
+func TestWriteError(t *testing.T) {
+	fh, err := os.Create("/tmp/streamxlsx.test")
+	require.NoError(t, err)
+	defer fh.Close()
+	defer os.Remove("/tmp/streamxlsx.test")
+
+	s := streamxlsx.New(fh)
+	s.WriteRow("aap")
+	s.WriteRow("noot")
+	fh.Close() // !
+	s.WriteSheet("sheet 1")
+	s.WriteRow("aap")
+	s.WriteRow("noot")
+	s.WriteSheet("sheet 2")
+	s.WriteRow("aap")
+	require.EqualError(t, s.Close(), "write /tmp/streamxlsx.test: file already closed")
 }

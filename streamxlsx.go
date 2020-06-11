@@ -60,6 +60,7 @@ func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
 // its WriteSheet().  There is always an open sheet. You don't have to close
 // the final sheet, but it'll give you a boring name ("sheet N").
 func (s *StreamXLSX) WriteSheet(title string) error {
+	s.sheet() // make sure there is one open
 	s.openSheet.Close()
 	if err := s.writeSheetRelations(); err != nil { // for hyperlink refs
 		return err
