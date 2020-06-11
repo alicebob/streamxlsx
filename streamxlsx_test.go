@@ -184,6 +184,20 @@ func TestHangingSheet(t *testing.T) {
 	require.Len(t, sheet0.Rows, 2)
 }
 
+func TestEmptyFile(t *testing.T) {
+	buf := &bytes.Buffer{}
+	s := streamxlsx.New(buf)
+	s.Close()
+
+	// Read it back again
+	xf, err := xlsx.OpenBinary(buf.Bytes())
+	require.NoError(t, err)
+	require.Len(t, xf.Sheets, 1)
+	sheet0 := xf.Sheets[0]
+	require.Equal(t, "sheet 1", sheet0.Name)
+	require.Len(t, sheet0.Rows, 0)
+}
+
 func TestEmptySheet(t *testing.T) {
 	buf := &bytes.Buffer{}
 	s := streamxlsx.New(buf)

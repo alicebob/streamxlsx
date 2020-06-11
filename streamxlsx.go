@@ -100,6 +100,10 @@ type Hyperlink struct {
 
 // Finish writing the spreadsheet.
 func (s *StreamXLSX) Close() error {
+	if len(s.finishedSheets) == 0 {
+		// there seems to be a requirement of at least 1 sheet
+		s.sheet()
+	}
 	if s.openSheet != nil {
 		if err := s.WriteSheet(fmt.Sprintf("sheet %d", len(s.finishedSheets)+1)); err != nil {
 			return err
