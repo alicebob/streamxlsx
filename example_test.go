@@ -32,7 +32,9 @@ func Example() {
 
 	s.WriteRow("13")
 	s.WriteSheet("that was sheet 2")
-	s.Close()
+	if err := s.Close(); err != nil {
+		panic(err)
+	}
 
 	// Output:
 }
