@@ -132,7 +132,7 @@ func asCol(n int) string {
 
 	for n > 0 {
 		n -= 1
-		s = string('A'+(n%26)) + s
+		s = string(rune('A'+(n%26))) + s
 		n /= 26
 	}
 
