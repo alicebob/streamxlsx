@@ -24,6 +24,7 @@ func Example() {
 	s.WriteRow("a link", Hyperlink{"http://example.com/v2", "clickmev2", "I'm a tooltipv2"}, "expected: link to 'http://example.com/v2', title'clickmev2', tooltip 'I'm a tooltipv2'")
 	s.WriteRow("a datetime", s.Format(DefaultDatetimeFormat, time.Date(2010, 10, 10, 10, 10, 10, 0, time.UTC)), "expected: 10/10/2010 10:10 (or 10/10/10)")
 	s.WriteRow("bools", true, false)
+	s.WriteRow("empty cell", nil, "<-- empty cell")
 	s.WriteRow()
 	s.WriteRow()
 	s.WriteRow("there should be another sheet with a single value")

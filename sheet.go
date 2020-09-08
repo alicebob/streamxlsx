@@ -46,6 +46,9 @@ func (sh *sheetEncoder) Close() {
 func (sh *sheetEncoder) writeRow(cs ...interface{}) error {
 	fmt.Fprintf(sh.buf, `<row r="%d">`, sh.rows+1)
 	for i, v := range cs {
+		if v == nil {
+			continue
+		}
 		cell, err := asCell(v)
 		if err != nil {
 			return err
