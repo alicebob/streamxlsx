@@ -17,11 +17,13 @@ type StreamXLSX struct {
 	// use this directly, but via `Format()`.
 	Styles     *Stylesheet
 	styleCache map[string]int
+	error      error // returned with Close()
 }
 
-// New creates a new file. Do Close() it afterwards.
+// New creates a new file. Do Close() it afterwards. No need to check every
+// write for errors, Close() will return the last error.
 //
-// A StreamXLSX is currently not safe to use with multiple go routines at the same time.
+// A StreamXLSX is not safe to use with multiple go routines at the same time.
 func New(w io.Writer) *StreamXLSX {
 	s := &StreamXLSX{
 		zip:        zip.NewWriter(w),
@@ -51,8 +53,20 @@ func New(w io.Writer) *StreamXLSX {
 //
 // See Format() to apply number formatting to cells.
 func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
-	sh := s.sheet()
-	return sh.writeRow(vs...)
+	if s.error != nil {
+		return s.error
+	}
+
+	sh, err := s.sheet()
+	if err != nil {
+		s.error = err
+		return err
+	}
+	if err := sh.writeRow(vs...); err != nil {
+		s.error = err
+		return err
+	}
+	return nil
 }
 
 // WriteSheet closes the currenly open sheet, with the given title.
@@ -60,9 +74,18 @@ func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
 // its WriteSheet().  There is always an open sheet. You don't have to close
 // the final sheet, but it'll give you a boring name ("sheet N").
 func (s *StreamXLSX) WriteSheet(title string) error {
-	s.sheet() // make sure there is one open
+	if s.error != nil {
+		return s.error
+	}
+
+	// make sure there is a sheet open
+	if _, err := s.sheet(); err != nil {
+		s.error = err
+		return err
+	}
 	s.openSheet.Close()
 	if err := s.writeSheetRelations(); err != nil { // for hyperlink refs
+		s.error = err
 		return err
 	}
 	s.openSheet = nil
@@ -74,7 +97,10 @@ func (s *StreamXLSX) WriteSheet(title string) error {
 // This is used to wrap a value in a WriteRow().
 func (s *StreamXLSX) Format(code string, cell interface{}) Cell {
 	if xfID, ok := s.styleCache[code]; ok {
-		c, _ := applyStyle(xfID, cell) // FIXME: error is ignored
+		c, err := applyStyle(xfID, cell)
+		if err != nil {
+			s.error = err
+		}
 		return c
 	}
 
@@ -87,7 +113,10 @@ func (s *StreamXLSX) Format(code string, cell interface{}) Cell {
 	}
 	xfID := s.Styles.GetCellID(styleFx)
 	s.styleCache[code] = xfID
-	c, _ := applyStyle(xfID, cell) // FIXME: error is ignored
+	c, err := applyStyle(xfID, cell)
+	if err != nil {
+		s.error = err
+	}
 	return c
 }
 
@@ -100,9 +129,15 @@ type Hyperlink struct {
 
 // Finish writing the spreadsheet.
 func (s *StreamXLSX) Close() error {
+	if s.error != nil {
+		return s.error
+	}
+
 	if len(s.finishedSheets) == 0 {
 		// there seems to be a requirement of at least 1 sheet
-		s.sheet()
+		if _, err := s.sheet(); err != nil {
+			return err
+		}
 	}
 	if s.openSheet != nil {
 		if err := s.WriteSheet(fmt.Sprintf("sheet %d", len(s.finishedSheets)+1)); err != nil {
@@ -123,20 +158,29 @@ func (s *StreamXLSX) Close() error {
 	if err := s.writeContentTypes(); err != nil {
 		return err
 	}
-	return s.zip.Close()
+	if err := s.zip.Close(); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (s *StreamXLSX) sheet() *sheetEncoder {
+func (s *StreamXLSX) sheet() (*sheetEncoder, error) {
 	if s.openSheet != nil {
-		return s.openSheet
+		return s.openSheet, nil
 	}
 	filename := fmt.Sprintf("xl/worksheets/sheet%d.xml", len(s.finishedSheets)+1)
-	fh, _ := s.zip.Create(filename) // no need to close!
+	fh, err := s.zip.Create(filename) // no need to close!
+	if err != nil {
+		return nil, err
+	}
 
-	enc, _ := newSheetEncoder(fh) // FIXME err
+	enc, err := newSheetEncoder(fh)
+	if err != nil {
+		return nil, err
+	}
 
 	s.openSheet = enc
-	return s.openSheet
+	return s.openSheet, nil
 }
 
 func (s *StreamXLSX) writeWorkbook() error {
