@@ -29,7 +29,7 @@ See also `./example_test.go`.
 
 ## status
 
-"seems to work". The files have been tested with: gnumeric, Goog spreadsheets, online office 365 Excel, offline Excel, Numbers, Emacs.
+"seems to work". The files have been tested with: gnumeric, Goog spreadsheets, online office 365 Excel, offline Excel, Numbers, Emacs, LibreOffice Calc.
 
 
 ## see also
