@@ -37,3 +37,6 @@ See also `./example_test.go`.
 https://github.com/tealeg/xlsx/  
 https://docs.microsoft.com/en-us/office/open-xml/working-with-sheets  
 https://github.com/psmithuk/xlsx  
+
+Limits for xlsx files:
+https://support.microsoft.com/en-us/office/excel-specifications-and-limits-1672b34d-7043-467e-8e27-269d656771c3
