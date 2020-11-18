@@ -8,6 +8,12 @@ import (
 	"strconv"
 )
 
+type worksheetXML struct {
+	XMLName string   `xml:"worksheet"`
+	XMLNS   string   `xml:"xmlns,attr"`
+	Rows    []rowXML `xml:"sheetData>row"`
+}
+
 type rowXML struct {
 	Cells []Cell `xml:"c"`
 	Index int    `xml:"r,attr"`
