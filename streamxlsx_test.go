@@ -3,12 +3,11 @@ package streamxlsx_test
 import (
 	"bytes"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/alicebob/streamxlsx"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBasic(t *testing.T) {
@@ -27,11 +26,13 @@ func TestBasic(t *testing.T) {
 
 	// Read it back again
 	xf, err := streamxlsx.TestParse(buf.Bytes())
-	require.NoError(t, err)
-	require.Len(t, xf.Sheets, 2)
+	noError(t, err)
+	if have, want := len(xf.Sheets), 2; have != want {
+		t.Fatalf("have %d, want %d", have, want)
+	}
 	sheet0 := xf.Sheets[0]
-	require.Equal(t, "that was sheet 1", sheet0.Name)
-	assert.Equal(t,
+	mustEq(t, "that was sheet 1", sheet0.Name)
+	mustDeepEq(t,
 		[]streamxlsx.TestCell{
 			{"A1", "inlineStr", "12", 0},
 			{"B1", "inlineStr", "<-- that's a string", 0},
@@ -45,8 +46,8 @@ func TestBasic(t *testing.T) {
 		sheet0.Cells,
 	)
 	sheet1 := xf.Sheets[1]
-	require.Equal(t, "that was sheet 2", sheet1.Name)
-	assert.Equal(t,
+	mustEq(t, "that was sheet 2", sheet1.Name)
+	mustDeepEq(t,
 		[]streamxlsx.TestCell{
 			{"A1", "inlineStr", "13", 0},
 		},
@@ -59,43 +60,45 @@ func TestDatatypes(t *testing.T) {
 	s := streamxlsx.New(buf)
 
 	// strings
-	require.NoError(t, s.WriteRow("a string", "hello world!"))
-	require.NoError(t, s.WriteRow("a char", 'q'))
-	require.NoError(t, s.WriteRow("bytes", []byte("hi there")))
-	require.NoError(t, s.WriteSheet("strings"))
+	noError(t, s.WriteRow("a string", "hello world!"))
+	noError(t, s.WriteRow("a char", 'q'))
+	noError(t, s.WriteRow("bytes", []byte("hi there")))
+	noError(t, s.WriteSheet("strings"))
 
 	// numbers
-	require.NoError(t, s.WriteRow("a number", 14))
-	require.NoError(t, s.WriteRow("a number", int(15)))
-	require.NoError(t, s.WriteRow("a number", int8(16)))
-	require.NoError(t, s.WriteRow("a number", int16(17)))
-	require.NoError(t, s.WriteRow("a number", int32(18)))
-	require.NoError(t, s.WriteRow("a number", int64(19)))
-	require.NoError(t, s.WriteRow("a number", uint(995)))
-	require.NoError(t, s.WriteRow("a number", uint8(99)))
-	require.NoError(t, s.WriteRow("a number", uint16(997)))
-	require.NoError(t, s.WriteRow("a number", uint32(998)))
-	require.NoError(t, s.WriteRow("a number", uint64(999)))
-	require.NoError(t, s.WriteRow("a float", 3.1415))
-	require.NoError(t, s.WriteRow("a float", float32(3.1415)))
-	require.NoError(t, s.WriteRow("a float", float64(3.1415)))
-	require.NoError(t, s.WriteSheet("numbers"))
+	noError(t, s.WriteRow("a number", 14))
+	noError(t, s.WriteRow("a number", int(15)))
+	noError(t, s.WriteRow("a number", int8(16)))
+	noError(t, s.WriteRow("a number", int16(17)))
+	noError(t, s.WriteRow("a number", int32(18)))
+	noError(t, s.WriteRow("a number", int64(19)))
+	noError(t, s.WriteRow("a number", uint(995)))
+	noError(t, s.WriteRow("a number", uint8(99)))
+	noError(t, s.WriteRow("a number", uint16(997)))
+	noError(t, s.WriteRow("a number", uint32(998)))
+	noError(t, s.WriteRow("a number", uint64(999)))
+	noError(t, s.WriteRow("a float", 3.1415))
+	noError(t, s.WriteRow("a float", float32(3.1415)))
+	noError(t, s.WriteRow("a float", float64(3.1415)))
+	noError(t, s.WriteSheet("numbers"))
 
 	// misc
-	require.NoError(t, s.WriteRow("a link", streamxlsx.Hyperlink{"http://example.com", "clickme", "I'm a tooltip"}))
-	require.NoError(t, s.WriteRow("a datetime", s.Format(streamxlsx.DefaultDatetimeFormat, time.Date(2010, 10, 10, 10, 10, 10, 0, time.UTC))))
-	require.NoError(t, s.WriteRow("bool", true, false))
-	require.NoError(t, s.WriteSheet("misc"))
+	noError(t, s.WriteRow("a link", streamxlsx.Hyperlink{"http://example.com", "clickme", "I'm a tooltip"}))
+	noError(t, s.WriteRow("a datetime", s.Format(streamxlsx.DefaultDatetimeFormat, time.Date(2010, 10, 10, 10, 10, 10, 0, time.UTC))))
+	noError(t, s.WriteRow("bool", true, false))
+	noError(t, s.WriteSheet("misc"))
 
 	s.Close()
 
 	xf, err := streamxlsx.TestParse(buf.Bytes())
-	require.NoError(t, err)
-	require.Len(t, xf.Sheets, 3)
+	noError(t, err)
+	if have, want := len(xf.Sheets), 3; have != want {
+		t.Fatalf("have %d, want %d", have, want)
+	}
 
 	t.Run("string values", func(t *testing.T) {
 		sheet := xf.Sheets[0]
-		assert.Equal(t,
+		mustDeepEq(t,
 			[]streamxlsx.TestCell{
 				{"A1", "inlineStr", "a string", 0},
 				{"B1", "inlineStr", "hello world!", 0},
@@ -110,7 +113,7 @@ func TestDatatypes(t *testing.T) {
 
 	t.Run("numeric values", func(t *testing.T) {
 		sheet := xf.Sheets[1]
-		assert.Equal(t,
+		mustDeepEq(t,
 			[]streamxlsx.TestCell{
 				{"A1", "inlineStr", "a number", 0},
 				{"B1", "n", "14", 0},
@@ -146,7 +149,7 @@ func TestDatatypes(t *testing.T) {
 	})
 	t.Run("numeric values", func(t *testing.T) {
 		sheet := xf.Sheets[2]
-		assert.Equal(t,
+		mustDeepEq(t,
 			[]streamxlsx.TestCell{
 				{"A1", "inlineStr", "a link", 0},
 				{"B1", "inlineStr", "clickme", 0},
@@ -170,10 +173,12 @@ func TestFormats(t *testing.T) {
 	s.Close()
 
 	xf, err := streamxlsx.TestParse(buf.Bytes())
-	require.NoError(t, err)
-	require.Len(t, xf.Sheets, 1)
+	noError(t, err)
+	if have, want := len(xf.Sheets), 1; have != want {
+		t.Fatalf("have %d, want %d", have, want)
+	}
 	sheet := xf.Sheets[0]
-	assert.Equal(t,
+	mustDeepEq(t,
 		[]streamxlsx.TestCell{
 			{"A1", "inlineStr", "a float", 0},
 			{"B1", "n", "3.141500", 0},
@@ -196,11 +201,15 @@ func TestHangingSheet(t *testing.T) {
 
 	// Read it back again
 	xf, err := streamxlsx.TestParse(buf.Bytes())
-	require.NoError(t, err)
-	require.Len(t, xf.Sheets, 1)
+	noError(t, err)
+	if have, want := len(xf.Sheets), 1; have != want {
+		t.Fatalf("have %d, want %d", have, want)
+	}
 	sheet0 := xf.Sheets[0]
-	require.Equal(t, "sheet 1", sheet0.Name)
-	require.Len(t, sheet0.Cells, 2)
+	mustEq(t, "sheet 1", sheet0.Name)
+	if have, want := len(sheet0.Cells), 2; have != want {
+		t.Fatalf("have %d, want %d", have, want)
+	}
 }
 
 func TestEmptyFile(t *testing.T) {
@@ -210,11 +219,15 @@ func TestEmptyFile(t *testing.T) {
 
 	// Read it back again
 	xf, err := streamxlsx.TestParse(buf.Bytes())
-	require.NoError(t, err)
-	require.Len(t, xf.Sheets, 1)
+	noError(t, err)
+	if have, want := len(xf.Sheets), 1; have != want {
+		t.Fatalf("have %d, want %d", have, want)
+	}
 	sheet0 := xf.Sheets[0]
-	require.Equal(t, "sheet 1", sheet0.Name)
-	require.Len(t, sheet0.Cells, 0)
+	mustEq(t, "sheet 1", sheet0.Name)
+	if have, want := len(sheet0.Cells), 0; have != want {
+		t.Fatalf("have %d, want %d", have, want)
+	}
 }
 
 func TestEmptySheet(t *testing.T) {
@@ -226,16 +239,20 @@ func TestEmptySheet(t *testing.T) {
 
 	// Read it back again
 	xf, err := streamxlsx.TestParse(buf.Bytes())
-	require.NoError(t, err)
-	require.Len(t, xf.Sheets, 2)
+	noError(t, err)
+	if have, want := len(xf.Sheets), 2; have != want {
+		t.Fatalf("have %d, want %d", have, want)
+	}
 	sheet0 := xf.Sheets[0]
-	require.Equal(t, "sheet 1", sheet0.Name)
-	require.Len(t, sheet0.Cells, 0)
+	mustEq(t, "sheet 1", sheet0.Name)
+	if have, want := len(sheet0.Cells), 0; have != want {
+		t.Fatalf("have %d, want %d", have, want)
+	}
 }
 
 func TestWriteError(t *testing.T) {
 	fh, err := os.Create("/tmp/streamxlsx.test")
-	require.NoError(t, err)
+	noError(t, err)
 	defer fh.Close()
 	defer os.Remove("/tmp/streamxlsx.test")
 
@@ -248,5 +265,27 @@ func TestWriteError(t *testing.T) {
 	s.WriteRow("noot")
 	s.WriteSheet("sheet 2")
 	s.WriteRow("aap")
-	require.EqualError(t, s.Close(), "write /tmp/streamxlsx.test: file already closed")
+	err = s.Close()
+	mustEq(t, err.Error(), "write /tmp/streamxlsx.test: file already closed")
+}
+
+func noError(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustEq(t *testing.T, want, have string) {
+	t.Helper()
+	if have != want {
+		t.Fatalf("have %q, want %q", have, want)
+	}
+}
+
+func mustDeepEq(t *testing.T, want, have interface{}) {
+	t.Helper()
+	if !reflect.DeepEqual(have, want) {
+		t.Fatalf("have %#v, want %#v", have, want)
+	}
 }
