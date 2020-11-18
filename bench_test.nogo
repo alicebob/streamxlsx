@@ -1,3 +1,4 @@
+// file has a weird filename to avoid dragging in a go.mod dependency
 package streamxlsx_test
 
 import (
