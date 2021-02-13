@@ -36,6 +36,11 @@ func writeWorkbookRelations(fh io.Writer, sheetTitles []string) error {
 			Target: "/xl/styles.xml",
 			Type:   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles",
 		},
+		{
+			ID:     "shared1",
+			Target: "/xl/sharedStrings.xml",
+			Type:   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings",
+		},
 	}
 	for i := range sheetTitles {
 		rels = append(rels, relationship{

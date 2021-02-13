@@ -152,6 +152,9 @@ func (s *StreamXLSX) Close() error {
 	if err := s.writeStylesheet(); err != nil {
 		return err
 	}
+	if err := s.writeSharedStrings(); err != nil {
+		return err
+	}
 	if err := s.writeWorkbookRelations(); err != nil {
 		return err
 	}
@@ -199,6 +202,15 @@ func (s *StreamXLSX) writeStylesheet() error {
 		return err
 	}
 	return writeStylesheet(fh, s.Styles)
+}
+
+func (s *StreamXLSX) writeSharedStrings() error {
+	filename := "xl/sharedStrings.xml"
+	fh, err := s.zip.Create(filename)
+	if err != nil {
+		return err
+	}
+	return writeSharedStrings(fh)
 }
 
 func (s *StreamXLSX) writeRelations() error {
