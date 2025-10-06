@@ -44,12 +44,15 @@ func New(w io.Writer) *StreamXLSX {
 // number of elements.
 //
 // Supported cell datatypes:
-//    all ints and uints, floats, string, bool
+//
+//	all ints and uints, floats, string, bool
+//
 // Additional special cases:
-//    []byte: will be base64 encoded
-//    time.Time: handled, but you need to Format() it. For example: s.Format("mm-dd-yy", aTimeTime)
-//    Hyperlink{}: will make the cell a hyperlink
-//    Cell{}: if you want to set everything manually
+//
+//	[]byte: will be base64 encoded
+//	time.Time: handled, but you need to Format() it. For example: s.Format("mm-dd-yy", aTimeTime)
+//	Hyperlink{}: will make the cell a hyperlink
+//	Cell{}: if you want to set everything manually
 //
 // See Format() to apply number formatting to cells.
 func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
@@ -93,7 +96,7 @@ func (s *StreamXLSX) WriteSheet(title string) error {
 	return nil
 }
 
-// Adds a number format to a cell. Examples or formats are "0.00", "0%", ...
+// Adds a number format to a cell. Examples of formats are "0.00", "0%", ...
 // This is used to wrap a value in a WriteRow().
 func (s *StreamXLSX) Format(code string, cell interface{}) Cell {
 	if xfID, ok := s.styleCache[code]; ok {
