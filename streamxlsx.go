@@ -76,6 +76,9 @@ func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
 // The process is you first do all the `WriteRow()`s for a sheet, followed by
 // its WriteSheet().  There is always an open sheet. You don't have to close
 // the final sheet, but it'll give you a boring name ("sheet N").
+//
+// Note that Excel doesn't like titles over 31 characters and might give an
+// error on opening. Openoffice and Google sheets don't seem to care much.
 func (s *StreamXLSX) WriteSheet(title string) error {
 	if s.error != nil {
 		return s.error
