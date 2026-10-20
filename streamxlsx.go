@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"path/filepath"
 )
 
 type StreamXLSX struct {
@@ -15,9 +16,17 @@ type StreamXLSX struct {
 	finishedSheets []string
 	// The stylesheet will be written on Close(). You generally won't want to
 	// use this directly, but via `Format()`.
-	Styles     *Stylesheet
-	styleCache map[string]int
-	error      error // returned with Close()
+	Styles      *Stylesheet
+	styleCache  map[string]int
+	ImageLoader ImageLoader
+	error       error // returned with Close()
+	// Image tracking
+	allImages    []imageRef   // all images across all sheets
+	sheetImages  [][]imageRef // images per sheet (indexed by sheet number)
+	currentSheet int          // current sheet index (0-based)
+	imageFormats []string     // collected image formats (for content types)
+	// Sheet-level relations tracking (for hyperlinks and drawings)
+	sheetRelations [][]relationship // relations per sheet (for writing in Close)
 }
 
 // New creates a new file. Do Close() it afterwards. No need to check every
@@ -26,9 +35,12 @@ type StreamXLSX struct {
 // A StreamXLSX is not safe to use with multiple go routines at the same time.
 func New(w io.Writer) *StreamXLSX {
 	s := &StreamXLSX{
-		zip:        zip.NewWriter(w),
-		Styles:     &Stylesheet{},
-		styleCache: map[string]int{},
+		zip:            zip.NewWriter(w),
+		Styles:         &Stylesheet{},
+		styleCache:     map[string]int{},
+		sheetImages:    make([][]imageRef, 0),
+		sheetRelations: make([][]relationship, 0),
+		currentSheet:   0,
 	}
 
 	// empty style. Not 100% it's needed
@@ -89,11 +101,24 @@ func (s *StreamXLSX) WriteSheet(title string) error {
 		s.error = err
 		return err
 	}
-	s.openSheet.Close()
-	if err := s.writeSheetRelations(); err != nil { // for hyperlink refs
-		s.error = err
-		return err
+	// Collect images and relations from this sheet before closing
+	if s.openSheet != nil {
+		sheetIndex := s.openSheet.sheetIndex
+		// Ensure we have a slot for this sheet's images
+		for len(s.sheetImages) <= sheetIndex {
+			s.sheetImages = append(s.sheetImages, []imageRef{})
+		}
+		if len(s.openSheet.images) > 0 {
+			s.sheetImages[sheetIndex] = s.openSheet.images
+			s.allImages = append(s.allImages, s.openSheet.images...)
+			s.openSheet.drawingRelID = fmt.Sprintf("drawId%d", len(s.openSheet.relations)+1)
+		}
+		for len(s.sheetRelations) <= sheetIndex {
+			s.sheetRelations = append(s.sheetRelations, []relationship{})
+		}
+		s.sheetRelations[sheetIndex] = append(s.sheetRelations[sheetIndex], s.openSheet.relations...)
 	}
+	s.openSheet.Close()
 	s.openSheet = nil
 	s.finishedSheets = append(s.finishedSheets, title)
 	return nil
@@ -146,10 +171,39 @@ func (s *StreamXLSX) Close() error {
 		}
 	}
 	if s.openSheet != nil {
-		if err := s.WriteSheet(fmt.Sprintf("sheet %d", len(s.finishedSheets)+1)); err != nil {
+		// Collect images and relations from the open sheet before closing it
+		sheetIndex := s.openSheet.sheetIndex
+		// Ensure we have a slot for this sheet's images
+		for len(s.sheetImages) <= sheetIndex {
+			s.sheetImages = append(s.sheetImages, []imageRef{})
+		}
+		if len(s.openSheet.images) > 0 {
+			s.sheetImages[sheetIndex] = s.openSheet.images
+			s.allImages = append(s.allImages, s.openSheet.images...)
+			s.openSheet.drawingRelID = fmt.Sprintf("drawId%d", len(s.openSheet.relations)+1)
+		}
+		for len(s.sheetRelations) <= sheetIndex {
+			s.sheetRelations = append(s.sheetRelations, []relationship{})
+		}
+		s.sheetRelations[sheetIndex] = append(s.sheetRelations[sheetIndex], s.openSheet.relations...)
+
+		s.openSheet.Close()
+		s.finishedSheets = append(s.finishedSheets, fmt.Sprintf("sheet %d", len(s.finishedSheets)+1))
+		s.openSheet = nil
+	}
+
+	// Write sheet relations (including drawing relationships for images)
+	if err := s.writeAllSheetRelations(); err != nil {
+		return err
+	}
+
+	// Write images and drawings if we have any
+	if s.ImageLoader != nil && len(s.allImages) > 0 {
+		var err error
+		s.imageFormats, err = s.writeImagesAndDrawings()
+		if err != nil {
 			return err
 		}
-
 	}
 
 	if err := s.writeWorkbook(); err != nil {
@@ -177,13 +231,19 @@ func (s *StreamXLSX) sheet() (*sheetEncoder, error) {
 	if s.openSheet != nil {
 		return s.openSheet, nil
 	}
-	filename := fmt.Sprintf("xl/worksheets/sheet%d.xml", len(s.finishedSheets)+1)
+	sheetIndex := len(s.finishedSheets)
+	s.currentSheet = sheetIndex
+	// Ensure we have a slot for this sheet's images
+	for len(s.sheetImages) <= sheetIndex {
+		s.sheetImages = append(s.sheetImages, []imageRef{})
+	}
+	filename := fmt.Sprintf("xl/worksheets/sheet%d.xml", sheetIndex+1)
 	fh, err := s.zip.Create(filename) // no need to close!
 	if err != nil {
 		return nil, err
 	}
 
-	enc, err := newSheetEncoder(fh)
+	enc, err := newSheetEncoder(fh, sheetIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -255,5 +315,222 @@ func (s *StreamXLSX) writeContentTypes() error {
 	if err != nil {
 		return err
 	}
-	return writeContentTypes(fh, len(s.finishedSheets))
+	// Pass the number of unique images for media overrides
+	uniqueImageCount := 0
+	if len(s.allImages) > 0 {
+		// Count unique image names
+		seen := make(map[string]bool)
+		for _, img := range s.allImages {
+			if !seen[img.name] {
+				seen[img.name] = true
+				uniqueImageCount++
+			}
+		}
+	}
+	return writeContentTypes(fh, len(s.finishedSheets), s.imageFormats, uniqueImageCount)
+}
+
+// writeImagesAndDrawings writes all image files and drawing XML files
+// Returns a slice of image format strings for content types
+func (s *StreamXLSX) writeImagesAndDrawings() ([]string, error) {
+	// Collect all image formats for content types
+	imageFormats := make(map[string]bool)
+
+	// Map from image name to imageInfo
+	imageMap := map[string]*imageInfo{}
+	imageIndex := 0
+
+	// First, load all unique images
+	for _, imgRef := range s.allImages {
+		if _, exists := imageMap[imgRef.name]; !exists {
+			loadedImg, err := s.ImageLoader(imgRef.name)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load image %q: %w", imgRef.name, err)
+			}
+			if loadedImg == nil {
+				return nil, fmt.Errorf("ImageLoader returned nil for image %q", imgRef.name)
+			}
+
+			// Extract format from ContentType
+			format := formatFromContentType(loadedImg.ContentType)
+			if format == "" {
+				format = "png" // default
+			}
+			imageFormats[format] = true
+
+			// Use dimensions from LoadedImage
+			width := loadedImg.Width
+			height := loadedImg.Height
+			// Override with Image struct dimensions if specified
+			if imgRef.width > 0 {
+				width = imgRef.width
+			}
+			if imgRef.height > 0 {
+				height = imgRef.height
+			}
+			width = max(width, 20)
+			height = max(height, 20)
+
+			imageIndex++
+			mediaPath := fmt.Sprintf("xl/media/image%d.%s", imageIndex, format)
+
+			fh, err := s.zip.Create(mediaPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create image file %s: %w", mediaPath, err)
+			}
+			if _, err = fh.Write(loadedImg.Data); err != nil {
+				return nil, fmt.Errorf("failed to write image data for %s: %w", imgRef.name, err)
+			}
+
+			imageMap[imgRef.name] = &imageInfo{
+				name:      imgRef.name,
+				format:    format,
+				mediaPath: mediaPath,
+				width:     width,
+				height:    height,
+			}
+		}
+	}
+
+	for sheetIdx, images := range s.sheetImages {
+		if len(images) == 0 {
+			continue
+		}
+
+		drawingPath := fmt.Sprintf("xl/drawings/drawing%d.xml", sheetIdx+1)
+		fh, err := s.zip.Create(drawingPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create drawing file %s: %w", drawingPath, err)
+		}
+		if err := s.writeDrawingXML(fh, images, imageMap); err != nil {
+			return nil, err
+		}
+
+		relsPath := fmt.Sprintf("xl/drawings/_rels/drawing%d.xml.rels", sheetIdx+1)
+		fh, err = s.zip.Create(relsPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create drawing rels file %s: %w", relsPath, err)
+		}
+
+		drawingRels := make([]relationship, 0)
+		for i, imgRef := range images {
+			info := imageMap[imgRef.name]
+			if info == nil {
+				continue
+			}
+			// Relationship from drawing to image in media
+			mediaRelPath := "../media/" + filepath.Base(info.mediaPath)
+			drawingRels = append(drawingRels, relationship{
+				ID:     fmt.Sprintf("rId%d", i+1),
+				Type:   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+				Target: mediaRelPath,
+			})
+		}
+
+		if err := writeRelations_(fh, drawingRels); err != nil {
+			return nil, fmt.Errorf("failed to write drawing relationships: %w", err)
+		}
+	}
+
+	formatsList := make([]string, 0, len(imageFormats))
+	for f := range imageFormats {
+		formatsList = append(formatsList, f)
+	}
+
+	return formatsList, nil
+}
+
+// writeAllSheetRelations writes the .rels files for all sheets
+func (s *StreamXLSX) writeAllSheetRelations() error {
+	for sheetIdx := range s.sheetRelations {
+		rels := s.sheetRelations[sheetIdx]
+
+		if sheetIdx < len(s.sheetImages) && len(s.sheetImages[sheetIdx]) > 0 && s.ImageLoader != nil {
+			rel := relationship{
+				ID:     fmt.Sprintf("drawId%d", len(rels)+1),
+				Type:   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+				Target: fmt.Sprintf("/xl/drawings/drawing%d.xml", sheetIdx+1),
+			}
+			rels = append(rels, rel)
+		}
+
+		if len(rels) > 0 {
+			filename := fmt.Sprintf("xl/worksheets/_rels/sheet%d.xml.rels", sheetIdx+1)
+			fh, err := s.zip.Create(filename)
+			if err != nil {
+				return err
+			}
+			if err := writeRelations_(fh, rels); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// writeDrawingXML generates the drawing XML for a sheet's images
+func (s *StreamXLSX) writeDrawingXML(w io.Writer, images []imageRef, imageMap map[string]*imageInfo) error {
+	io.WriteString(w, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+"\n")
+	io.WriteString(w, `<xdr:wsDr `+"\n")
+	io.WriteString(w, `  xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"`+"\n")
+	io.WriteString(w, `  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"`+"\n")
+	io.WriteString(w, `  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`+"\n")
+
+	for i, imgRef := range images {
+		info := imageMap[imgRef.name]
+		if info == nil {
+			continue
+		}
+
+		relID := fmt.Sprintf("rId%d", i+1)
+
+		col := imgRef.anchorCol
+		row := imgRef.anchorRow
+
+		// Use dimensions from imageInfo (which come from LoadedImage, overridden by Image struct)
+		width := info.width
+		height := info.height
+
+		widthEMU := width * emuPerPixel
+		heightEMU := height * emuPerPixel
+
+		// Use oneCellAnchor like Google Sheets does
+		io.WriteString(w, "  <xdr:oneCellAnchor>\n")
+		// From point (top-left)
+		io.WriteString(w, "    <xdr:from>\n")
+		fmt.Fprintf(w, "      <xdr:col>%d</xdr:col>\n", col)
+		io.WriteString(w, "      <xdr:colOff>0</xdr:colOff>\n")
+		fmt.Fprintf(w, "      <xdr:row>%d</xdr:row>\n", row)
+		io.WriteString(w, "      <xdr:rowOff>0</xdr:rowOff>\n")
+		io.WriteString(w, "    </xdr:from>\n")
+		// Size of the image
+		fmt.Fprintf(w, "    <xdr:ext cx=\"%d\" cy=\"%d\"/>\n", widthEMU, heightEMU)
+		// Picture
+		io.WriteString(w, "    <xdr:pic>\n")
+		io.WriteString(w, "      <xdr:nvPicPr>\n")
+		fmt.Fprintf(w, "        <xdr:cNvPr id=\"%d\" name=\"%s\"/>\n", i+1, info.name)
+		io.WriteString(w, "        <xdr:cNvPicPr preferRelativeResize=\"0\"/>\n")
+		io.WriteString(w, "      </xdr:nvPicPr>\n")
+		io.WriteString(w, "      <xdr:blipFill>\n")
+		fmt.Fprintf(w, "        <a:blip r:embed=\"%s\"/>\n", relID)
+		io.WriteString(w, "        <a:stretch>\n")
+		io.WriteString(w, "          <a:fillRect/>\n")
+		io.WriteString(w, "        </a:stretch>\n")
+		io.WriteString(w, "      </xdr:blipFill>\n")
+		io.WriteString(w, "      <xdr:spPr>\n")
+		io.WriteString(w, "        <a:prstGeom prst=\"rect\">\n")
+		io.WriteString(w, "          <a:avLst/>\n")
+		io.WriteString(w, "        </a:prstGeom>\n")
+		io.WriteString(w, "        <a:noFill/>\n")
+		io.WriteString(w, "        <a:ln w=\"0\">\n")
+		io.WriteString(w, "          <a:noFill/>\n")
+		io.WriteString(w, "        </a:ln>\n")
+		io.WriteString(w, "      </xdr:spPr>\n")
+		io.WriteString(w, "    </xdr:pic>\n")
+		io.WriteString(w, "    <xdr:clientData fLocksWithSheet=\"0\"/>\n")
+		io.WriteString(w, "  </xdr:oneCellAnchor>\n")
+	}
+
+	io.WriteString(w, `</xdr:wsDr>`+"\n")
+	return nil
 }

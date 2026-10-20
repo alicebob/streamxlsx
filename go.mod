@@ -1,3 +1,3 @@
 module github.com/alicebob/streamxlsx
 
-go 1.14
+go 1.21

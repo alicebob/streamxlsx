@@ -28,24 +28,29 @@ type hyperlink struct {
 }
 
 type sheetEncoder struct {
-	buf        *bufio.Writer
-	rows       int
-	hyperlinks []hyperlink
-	relations  []relationship
+	buf          *bufio.Writer
+	rows         int
+	hyperlinks   []hyperlink
+	relations    []relationship
+	sheetIndex   int        // 0-based sheet index
+	images       []imageRef // images for this sheet
+	drawingRelID string     // relationship ID for drawing (if any)
 }
 
-func newSheetEncoder(fh io.Writer) (*sheetEncoder, error) {
+func newSheetEncoder(fh io.Writer, sheetIndex int) (*sheetEncoder, error) {
 	fh.Write([]byte(xml.Header))
 
 	sh := &sheetEncoder{
-		buf: bufio.NewWriterSize(fh, 1_000_000),
+		buf:        bufio.NewWriterSize(fh, 1_000_000),
+		sheetIndex: sheetIndex,
+		images:     make([]imageRef, 0),
 	}
 
 	return sh, sheetOpen(sh.buf)
 }
 
 func (sh *sheetEncoder) Close() {
-	sheetClose(sh.buf, sh.hyperlinks)
+	sheetClose(sh.buf, sh.hyperlinks, sh.drawingRelID)
 	sh.buf.Flush()
 }
 
@@ -53,6 +58,21 @@ func (sh *sheetEncoder) writeRow(cs ...interface{}) error {
 	fmt.Fprintf(sh.buf, `<row r="%d">`, sh.rows+1)
 	for i, v := range cs {
 		if v == nil {
+			continue
+		}
+		// Handle Image specially - images don't go in cells
+		if img, ok := v.(Image); ok {
+			// Track the image with its position (column i, current row)
+			imgRef := imageRef{
+				name:       img.Name,
+				anchorCol:  i,
+				anchorRow:  sh.rows,
+				sheetIndex: sh.sheetIndex,
+				width:      img.Width,
+				height:     img.Height,
+			}
+			sh.images = append(sh.images, imgRef)
+			// Images are in the drawing layer, not in cells
 			continue
 		}
 		cell, err := asCell(v)
@@ -99,10 +119,16 @@ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 	return nil
 }
 
-func sheetClose(w *bufio.Writer, links []hyperlink) error {
+func sheetClose(w *bufio.Writer, links []hyperlink, drawingRelID string) error {
 	w.WriteString(`</sheetData>`)
 	if err := encodeHyperlinks(w, links); err != nil {
 		return err
+	}
+	// Add drawing reference if this sheet has images
+	if drawingRelID != "" {
+		w.WriteString(`<drawing r:id="`)
+		w.WriteString(drawingRelID)
+		w.WriteString(`"/>`)
 	}
 	w.WriteString(`</worksheet>`)
 	return nil

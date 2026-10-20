@@ -13,6 +13,20 @@ func Example() {
 	defer fh.Close()
 
 	s := New(fh)
+	s.ImageLoader = func(name string) (*LoadedImage, error) {
+		data, err := os.ReadFile("./testdata/" + name)
+		if err != nil {
+			return nil, err
+		}
+		// For the example, we need to provide dimensions. Since we don't have
+		// image decoding, we'll just return the data with 0 dimensions and let
+		// the library default to 20x20.
+		// In a real implementation, you'd use image.DecodeConfig or similar.
+		return &LoadedImage{
+			Data:        data,
+			ContentType: "image/jpeg",
+		}, nil
+	}
 	s.WriteRow("a string", "hello world!", "expected: 'hello world!'")
 	s.WriteRow("also a string", "14", "expected: '14'")
 	s.WriteRow("a number", 14, "expected: 14")
@@ -25,11 +39,12 @@ func Example() {
 	s.WriteRow("a datetime", s.Format(DefaultDatetimeFormat, time.Date(2010, 10, 10, 10, 10, 10, 0, time.UTC)), "expected: 10/10/2010 10:10 (or 10/10/10)")
 	s.WriteRow("bools", true, false)
 	s.WriteRow("empty cell", nil, "<-- empty cell")
+	s.WriteRow("image", Image{Name: "rubber-duck.jpg"})
+	s.WriteRow("image", Image{Name: "rubber-duck.jpg"})
 	s.WriteRow()
 	s.WriteRow()
 	s.WriteRow("there should be another sheet with a single value")
 	s.WriteSheet("that was sheet 1")
-
 	s.WriteRow("13")
 	s.WriteSheet("that was sheet 2")
 	if err := s.Close(); err != nil {
