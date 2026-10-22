@@ -27,6 +27,12 @@ type hyperlink struct {
 	url     string
 }
 
+// RowOpts configures how a row is written.
+type RowOpts struct {
+	// Height is the row height in points. 0 means Excel's default height.
+	Height float64
+}
+
 type sheetEncoder struct {
 	buf          *bufio.Writer
 	rows         int
@@ -54,8 +60,13 @@ func (sh *sheetEncoder) Close() {
 	sh.buf.Flush()
 }
 
-func (sh *sheetEncoder) writeRow(cs ...interface{}) error {
-	fmt.Fprintf(sh.buf, `<row r="%d">`, sh.rows+1)
+func (sh *sheetEncoder) writeRow(opts RowOpts, cs ...interface{}) error {
+	if opts.Height > 0 {
+		fmt.Fprintf(sh.buf, `<row r="%d" ht="%s" customHeight="1">`,
+			sh.rows+1, strconv.FormatFloat(opts.Height, 'f', -1, 64))
+	} else {
+		fmt.Fprintf(sh.buf, `<row r="%d">`, sh.rows+1)
+	}
 	for i, v := range cs {
 		if v == nil {
 			continue

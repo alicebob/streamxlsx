@@ -67,7 +67,18 @@ func New(w io.Writer) *StreamXLSX {
 //	Cell{}: if you want to set everything manually
 //
 // See Format() to apply number formatting to cells.
+// See WriteRowOpts() to set row options like the row height.
 func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
+	return s.WriteRowOpts(RowOpts{}, vs...)
+}
+
+// WriteRowOpts writes a row to the current sheet with the given options.
+// The vs arguments are the same as for WriteRow().
+//
+// Example:
+//
+//	s.WriteRowOpts(RowOpts{Height: 50}, "label", Image{Name: "big.png", Height: 45})
+func (s *StreamXLSX) WriteRowOpts(opts RowOpts, vs ...interface{}) error {
 	if s.error != nil {
 		return s.error
 	}
@@ -77,7 +88,7 @@ func (s *StreamXLSX) WriteRow(vs ...interface{}) error {
 		s.error = err
 		return err
 	}
-	if err := sh.writeRow(vs...); err != nil {
+	if err := sh.writeRow(opts, vs...); err != nil {
 		s.error = err
 		return err
 	}
@@ -487,9 +498,16 @@ func (s *StreamXLSX) writeDrawingXML(w io.Writer, images []imageRef, imageMap ma
 		col := imgRef.anchorCol
 		row := imgRef.anchorRow
 
-		// Use dimensions from imageInfo (which come from LoadedImage, overridden by Image struct)
+		// Use dimensions from this imageRef, falling back to imageInfo
+		// (which comes from LoadedImage, or the first Image struct seen)
 		width := info.width
 		height := info.height
+		if imgRef.width > 0 {
+			width = imgRef.width
+		}
+		if imgRef.height > 0 {
+			height = imgRef.height
+		}
 
 		widthEMU := width * emuPerPixel
 		heightEMU := height * emuPerPixel
