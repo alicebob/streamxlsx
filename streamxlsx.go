@@ -5,6 +5,7 @@ package streamxlsx
 
 import (
 	"archive/zip"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -21,10 +22,9 @@ type StreamXLSX struct {
 	ImageLoader ImageLoader
 	error       error // returned with Close()
 	// Image tracking
-	allImages    []imageRef   // all images across all sheets
-	sheetImages  [][]imageRef // images per sheet (indexed by sheet number)
-	currentSheet int          // current sheet index (0-based)
-	imageFormats []string     // collected image formats (for content types)
+	allImages   []imageRef   // all images across all sheets
+	sheetImages [][]imageRef // images per sheet (indexed by sheet number)
+	mediaPaths  []string     // paths of media files written to the zip
 	// Sheet-level relations tracking (for hyperlinks and drawings)
 	sheetRelations [][]relationship // relations per sheet (for writing in Close)
 }
@@ -40,7 +40,6 @@ func New(w io.Writer) *StreamXLSX {
 		styleCache:     map[string]int{},
 		sheetImages:    make([][]imageRef, 0),
 		sheetRelations: make([][]relationship, 0),
-		currentSheet:   0,
 	}
 
 	// empty style. Not 100% it's needed
@@ -211,7 +210,7 @@ func (s *StreamXLSX) Close() error {
 	// Write images and drawings if we have any
 	if s.ImageLoader != nil && len(s.allImages) > 0 {
 		var err error
-		s.imageFormats, err = s.writeImagesAndDrawings()
+		s.mediaPaths, err = s.writeImagesAndDrawings()
 		if err != nil {
 			return err
 		}
@@ -243,7 +242,6 @@ func (s *StreamXLSX) sheet() (*sheetEncoder, error) {
 		return s.openSheet, nil
 	}
 	sheetIndex := len(s.finishedSheets)
-	s.currentSheet = sheetIndex
 	// Ensure we have a slot for this sheet's images
 	for len(s.sheetImages) <= sheetIndex {
 		s.sheetImages = append(s.sheetImages, []imageRef{})
@@ -308,48 +306,22 @@ func (s *StreamXLSX) writeWorkbookRelations() error {
 	return writeWorkbookRelations(fh, s.finishedSheets)
 }
 
-func (s *StreamXLSX) writeSheetRelations() error {
-	if len(s.openSheet.relations) == 0 {
-		return nil
-	}
-	filename := fmt.Sprintf("xl/worksheets/_rels/sheet%d.xml.rels", len(s.finishedSheets)+1)
-	fh, err := s.zip.Create(filename)
-	if err != nil {
-		return err
-	}
-	return writeRelations_(fh, s.openSheet.relations)
-}
-
 func (s *StreamXLSX) writeContentTypes() error {
 	filename := "[Content_Types].xml"
 	fh, err := s.zip.Create(filename)
 	if err != nil {
 		return err
 	}
-	// Pass the number of unique images for media overrides
-	uniqueImageCount := 0
-	if len(s.allImages) > 0 {
-		// Count unique image names
-		seen := make(map[string]bool)
-		for _, img := range s.allImages {
-			if !seen[img.name] {
-				seen[img.name] = true
-				uniqueImageCount++
-			}
-		}
-	}
-	return writeContentTypes(fh, len(s.finishedSheets), s.imageFormats, uniqueImageCount)
+	return writeContentTypes(fh, len(s.finishedSheets), s.mediaPaths)
 }
 
-// writeImagesAndDrawings writes all image files and drawing XML files
-// Returns a slice of image format strings for content types
+// writeImagesAndDrawings writes all image files and drawing XML files.
+// Returns the paths of media files written to the zip (e.g., "xl/media/image1.png").
 func (s *StreamXLSX) writeImagesAndDrawings() ([]string, error) {
-	// Collect all image formats for content types
-	imageFormats := make(map[string]bool)
-
 	// Map from image name to imageInfo
 	imageMap := map[string]*imageInfo{}
 	imageIndex := 0
+	var mediaPaths []string
 
 	// First, load all unique images
 	for _, imgRef := range s.allImages {
@@ -363,11 +335,10 @@ func (s *StreamXLSX) writeImagesAndDrawings() ([]string, error) {
 			}
 
 			// Extract format from ContentType
-			format := formatFromContentType(loadedImg.ContentType)
-			if format == "" {
-				format = "png" // default
+			format, err := formatFromContentType(loadedImg.ContentType)
+			if err != nil {
+				return nil, fmt.Errorf("image %q: %w", imgRef.name, err)
 			}
-			imageFormats[format] = true
 
 			// Use dimensions from LoadedImage
 			width := loadedImg.Width
@@ -400,6 +371,7 @@ func (s *StreamXLSX) writeImagesAndDrawings() ([]string, error) {
 				width:     width,
 				height:    height,
 			}
+			mediaPaths = append(mediaPaths, mediaPath)
 		}
 	}
 
@@ -443,12 +415,7 @@ func (s *StreamXLSX) writeImagesAndDrawings() ([]string, error) {
 		}
 	}
 
-	formatsList := make([]string, 0, len(imageFormats))
-	for f := range imageFormats {
-		formatsList = append(formatsList, f)
-	}
-
-	return formatsList, nil
+	return mediaPaths, nil
 }
 
 // writeAllSheetRelations writes the .rels files for all sheets
@@ -526,7 +493,9 @@ func (s *StreamXLSX) writeDrawingXML(w io.Writer, images []imageRef, imageMap ma
 		// Picture
 		io.WriteString(w, "    <xdr:pic>\n")
 		io.WriteString(w, "      <xdr:nvPicPr>\n")
-		fmt.Fprintf(w, "        <xdr:cNvPr id=\"%d\" name=\"%s\"/>\n", i+1, info.name)
+		fmt.Fprintf(w, "        <xdr:cNvPr id=\"%d\" name=\"", i+1)
+		xml.EscapeText(w, []byte(info.name))
+		io.WriteString(w, "\"/>\n")
 		io.WriteString(w, "        <xdr:cNvPicPr preferRelativeResize=\"0\"/>\n")
 		io.WriteString(w, "      </xdr:nvPicPr>\n")
 		io.WriteString(w, "      <xdr:blipFill>\n")

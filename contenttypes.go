@@ -3,6 +3,8 @@ package streamxlsx
 import (
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 )
 
 // imageTypeToContentType returns the MIME type for an image format
@@ -21,7 +23,9 @@ func imageTypeToContentType(format string) string {
 	}
 }
 
-func writeContentTypes(fh io.Writer, sheetCount int, imageFormats []string, uniqueImageCount int) error {
+// writeContentTypes writes [Content_Types].xml.
+// mediaPaths are the actual paths of image files in the zip (e.g., "xl/media/image1.png").
+func writeContentTypes(fh io.Writer, sheetCount int, mediaPaths []string) error {
 	fh.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -41,15 +45,16 @@ func writeContentTypes(fh io.Writer, sheetCount int, imageFormats []string, uniq
 		)
 	}
 
-	// Add image content types
-	for _, format := range imageFormats {
-		contentType := imageTypeToContentType(format)
-		// Add Default for the extension - this covers all files with this extension
-		fmt.Fprintf(fh, `<Default Extension="%s" ContentType="%s"/>`, format, contentType)
-		// Add explicit Override for each media file (like Excel/LibreOffice does)
-		for j := 1; j <= uniqueImageCount; j++ {
-			fmt.Fprintf(fh, `<Override PartName="/xl/media/image%d.%s" ContentType="%s"/>`+"\n", j, format, contentType)
+	// Add image content types: one Default per unique extension, one Override per file
+	seenExt := make(map[string]bool)
+	for _, path := range mediaPaths {
+		ext := strings.TrimPrefix(filepath.Ext(path), ".")
+		contentType := imageTypeToContentType(ext)
+		if !seenExt[ext] {
+			seenExt[ext] = true
+			fmt.Fprintf(fh, `<Default Extension="%s" ContentType="%s"/>`, ext, contentType)
 		}
+		fmt.Fprintf(fh, `<Override PartName="/%s" ContentType="%s"/>`+"\n", path, contentType)
 	}
 
 	// Add drawing content types for each sheet that might have a drawing

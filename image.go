@@ -1,6 +1,7 @@
 package streamxlsx
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -49,11 +50,30 @@ const emuPerPixel = 9525
 
 // formatFromContentType extracts the image format from a MIME content type.
 // e.g., "image/png" -> "png", "image/jpeg" -> "jpeg"
-func formatFromContentType(contentType string) string {
-	// Remove "image/" prefix
-	format := strings.TrimPrefix(contentType, "image/")
-	if format == "jpg" {
-		return "jpeg"
+// Returns an error if the content type is not a recognized image type.
+func formatFromContentType(contentType string) (string, error) {
+	if !strings.HasPrefix(contentType, "image/") {
+		return "", fmt.Errorf("not an image content type: %q", contentType)
 	}
-	return format
+	format := strings.TrimPrefix(contentType, "image/")
+	switch format {
+	case "png", "jpeg", "gif", "bmp", "jpg":
+		if format == "jpg" {
+			return "jpeg", nil
+		}
+		return format, nil
+	default:
+		return "", fmt.Errorf("unsupported image content type: %q", contentType)
+	}
+}
+
+// ContainsAnyImage reports whether any of the given cell values is an Image.
+// Useful with WriteRowOpts to set a taller row height when a row embeds images.
+func ContainsAnyImage(vs ...interface{}) bool {
+	for _, v := range vs {
+		if _, ok := v.(Image); ok {
+			return true
+		}
+	}
+	return false
 }
